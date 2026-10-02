@@ -46,9 +46,9 @@ export function DesktopIntegrationSettingsSection({
   }
 
   const quickCaptureStatusLabel = !quickCaptureShortcutStatus.supported
-    ? "fallback"
+    ? "앱 내 단축키"
     : quickCaptureShortcutStatus.registered
-      ? "registered"
+      ? "등록됨"
       : "사용 불가";
 
   return (
@@ -90,7 +90,7 @@ export function DesktopIntegrationSettingsSection({
               className="h-4 w-4 text-violet-700 dark:text-violet-300"
               aria-hidden="true"
             />
-            <span>Quick Capture</span>
+            <span>빠른 기록</span>
           </div>
           <span
             className={
@@ -152,7 +152,7 @@ export function DesktopIntegrationSettingsSection({
               type="button"
               onClick={() => void onRefreshQuickCaptureShortcutStatus()}
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:border-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-900 dark:hover:text-neutral-100"
-              aria-label="Quick Capture 단축키 상태 새로고침"
+              aria-label="빠른 기록 단축키 상태 새로고침"
               title="새로고침"
             >
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -160,7 +160,7 @@ export function DesktopIntegrationSettingsSection({
             {quickCaptureShortcutSaveStatus === "saved" ? (
               <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-emerald-200 px-2 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:text-emerald-300">
                 <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                saved
+                저장됨
               </span>
             ) : null}
           </div>

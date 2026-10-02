@@ -119,14 +119,14 @@ export function DevControlPanel({
   }, [github.refreshProject, github.status.connected, projects]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-auto pr-1">
+    <div className="os-project-content flex h-full min-h-0 flex-col gap-3 overflow-auto pr-1">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-950 dark:text-neutral-50">
-            Dev Control
+            프로젝트
           </h2>
           <p className="text-[11px] text-slate-500 dark:text-neutral-400">
-            Command Center · 프로젝트 운영 상태 스캔
+            프로젝트 운영 상태를 한눈에 확인하세요
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
@@ -139,7 +139,7 @@ export function DevControlPanel({
                 : "rounded border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:border-neutral-700 dark:text-neutral-300"
             }
           >
-            Projects
+            프로젝트
           </button>
           <button
             type="button"
@@ -150,7 +150,7 @@ export function DevControlPanel({
                 : "rounded border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:border-neutral-700 dark:text-neutral-300"
             }
           >
-            공통 작업 / Workstreams
+            워크스트림
           </button>
           {activeSection === "projects" ? (
             <button
@@ -183,7 +183,7 @@ export function DevControlPanel({
           />
         ) : (
           <p className="rounded border border-dashed border-slate-300 p-4 text-xs text-slate-500 dark:border-neutral-800 dark:text-neutral-400">
-            Workstream 편집을 초기화하는 중입니다.
+            워크스트림 편집을 초기화하는 중입니다.
           </p>
         )
       ) : (
@@ -237,13 +237,13 @@ export function DevControlPanel({
                     {getDerivedProjectCardSummary(project, actions, model?.remoteHead?.message)}
                   </p>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-slate-500 dark:text-neutral-400 sm:grid-cols-4">
-                    <span>OPEN NEXT {getOpenNextCount(actions)}</span>
+                    <span>다음 작업 {getOpenNextCount(actions)}</span>
                     <span className={blocked ? "font-semibold text-rose-600" : ""}>
-                      {blocked ? "BLOCKED" : "차단 없음"}
+                      {blocked ? "차단됨" : "차단 없음"}
                     </span>
-                    <span className="truncate">branch {project.branch || "-"}</span>
-                    <span>PR {model?.openPullRequests.length ?? "-"}</span>
-                    <span>HEAD {shortSha(model?.remoteHead?.sha)}</span>
+                    <span className="truncate">브랜치 {project.branch || "-"}</span>
+                    <span>열린 변경 요청 {model?.openPullRequests.length ?? "-"}</span>
+                    <span>최신 커밋 {shortSha(model?.remoteHead?.sha)}</span>
                     <span className="col-span-2 truncate sm:col-span-3">
                       최근 변경 {formatTimestamp(lastUpdated)}
                     </span>

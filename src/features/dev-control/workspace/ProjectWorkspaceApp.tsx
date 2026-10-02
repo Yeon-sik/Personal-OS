@@ -14,7 +14,7 @@ export function ProjectWorkspaceApp() {
   if (!state) {
     return (
       <main className="app-shell flex items-center justify-center bg-slate-100 text-sm text-slate-500 dark:bg-black dark:text-neutral-400">
-        Project Workspace를 연결하는 중입니다…
+        프로젝트 작업 공간을 연결하는 중입니다…
       </main>
     );
   }

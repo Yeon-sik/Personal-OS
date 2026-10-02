@@ -134,14 +134,14 @@ export function QuickCapturePanel({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Quick Capture"
+        aria-label="빠른 입력"
         onKeyDown={handlePanelKeyDown}
         className="w-full max-w-[420px] rounded-lg border border-white/10 bg-neutral-950/95 p-3 text-white shadow-2xl shadow-black/50 backdrop-blur-xl max-sm:rounded-b-none max-sm:rounded-t-lg max-sm:pb-[calc(0.75rem+var(--app-safe-bottom))]"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-sm font-semibold tracking-normal">
-              Quick Capture
+              빠른 입력
             </div>
             <div className="mt-0.5 truncate text-[11px] text-neutral-400">
               {getShortcutLabel(shortcutStatus)}

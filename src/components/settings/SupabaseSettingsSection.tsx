@@ -15,6 +15,7 @@ import type {
 } from "../../lib/config/runtimeConfig";
 import { isManagedSupabaseConfig } from "../../lib/config/runtimeConfig";
 import type { SyncStatus } from "../../lib/sync/syncTypes";
+import { getSyncStatusDescription, getSyncStatusLabel } from "../syncStatusPresentation";
 
 interface SupabaseSettingsSectionProps {
   authEmail: string | null;
@@ -57,10 +58,10 @@ export function SupabaseSettingsSection({
   >("idle");
   const usesManagedConfig = isManagedSupabaseConfig(supabaseConfig);
   const configSourceLabel = usesManagedConfig
-    ? "managed"
+    ? "앱 관리"
     : supabaseConfig.loaded
-      ? "manual fallback"
-      : "not set";
+      ? "수동 연결"
+      : "미설정";
 
   useEffect(() => {
     setSupabaseUrl(supabaseConfig.supabaseUrl);
@@ -115,13 +116,13 @@ export function SupabaseSettingsSection({
           <div className="flex items-center justify-between gap-3">
             <dt>Supabase</dt>
             <dd className="font-medium text-slate-800 dark:text-neutral-200">
-              {isSupabaseConfigured ? "configured" : "local-only"}
+              {isSupabaseConfigured ? "연결 설정됨" : "로컬 저장 전용"}
             </dd>
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt>동기화</dt>
             <dd className="min-w-0 truncate font-medium text-slate-800 dark:text-neutral-200">
-              {syncStatus.label}
+              {getSyncStatusLabel(syncStatus.mode)}
             </dd>
           </div>
           <div className="flex items-center justify-between gap-3">
@@ -131,6 +132,9 @@ export function SupabaseSettingsSection({
             </dd>
           </div>
         </dl>
+        <p className="mt-2 text-[11px] leading-4 text-slate-500 dark:text-neutral-400">
+          {getSyncStatusDescription(syncStatus)}
+        </p>
 
         <button
           type="button"
@@ -161,8 +165,8 @@ export function SupabaseSettingsSection({
             </span>
           </div>
           <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-neutral-300">
-            backend 연결은 앱 환경설정으로 관리됩니다. 각 사용자는 자신의
-            이메일과 비밀번호로 사용자별 Auth account에 로그인합니다.
+            서버 연결은 앱 환경설정으로 관리됩니다. 각 사용자는 자신의
+            이메일과 비밀번호로 사용자별 인증 계정에 로그인합니다.
           </p>
         </section>
       ) : (
@@ -182,13 +186,13 @@ export function SupabaseSettingsSection({
             </div>
 
             <p className="text-xs leading-5 text-slate-500 dark:text-neutral-400">
-              앱에서 관리되는 연결이 없을 때만 사용하는 로컬 fallback입니다.
+              앱에서 관리되는 연결이 없을 때만 사용하는 로컬 대체 설정입니다.
             </p>
 
             <label className="block space-y-1.5">
               <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-neutral-400">
                 <LinkIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                Supabase URL
+                Supabase 주소
               </span>
               <input
                 type="url"
@@ -206,7 +210,7 @@ export function SupabaseSettingsSection({
             <label className="block space-y-1.5">
               <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-neutral-400">
                 <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
-                Anon key
+                공개 키
               </span>
               <input
                 type="password"
@@ -229,18 +233,18 @@ export function SupabaseSettingsSection({
               >
                 <Save className="h-4 w-4" aria-hidden="true" />
                 <span>
-                  {supabaseSaveStatus === "saving" ? "Saving" : "Save fallback"}
+                  {supabaseSaveStatus === "saving" ? "저장 중" : "수동 설정 저장"}
                 </span>
               </button>
               {supabaseSaveStatus === "saved" ? (
                 <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-emerald-200 px-2 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:text-emerald-300">
                   <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  saved
+                  저장됨
                 </span>
               ) : null}
               {supabaseSaveStatus === "error" ? (
                 <span className="inline-flex h-9 items-center rounded-md border border-red-200 px-2 text-xs font-medium text-red-700 dark:border-red-900 dark:text-red-300">
-                  failed
+                  실패
                 </span>
               ) : null}
             </div>
@@ -257,7 +261,7 @@ export function SupabaseSettingsSection({
                 <span>{authEmail ?? userId}</span>
               </div>
               <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                authenticated
+                로그인됨
               </span>
             </div>
             <button
@@ -273,7 +277,7 @@ export function SupabaseSettingsSection({
           <form onSubmit={handleSignIn} className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-neutral-100">
               <User className="h-4 w-4" aria-hidden="true" />
-              <span>Supabase Auth 로그인</span>
+              <span>Supabase 로그인</span>
             </div>
             <input
               type="email"

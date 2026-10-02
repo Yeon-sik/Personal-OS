@@ -85,10 +85,10 @@ export function FitnessPanel({
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <h2 className="truncate text-base font-semibold text-slate-950 dark:text-neutral-50">
-            Fitness Summary
+            건강·운동 요약
           </h2>
           <p className="truncate text-xs text-slate-500 dark:text-neutral-400">
-            FitnessApp 소유 원본의 Summary Projection v2 읽기 전용 화면
+            Fitness App에서 공유된 운동 요약을 확인하세요
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -122,9 +122,9 @@ export function FitnessPanel({
       <div className="shrink-0 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-100">
         <div className="font-semibold">읽기 전용</div>
         <p className="mt-1 text-xs leading-5">
-          운동·식사·체중 원본은 FitnessApp이 소유합니다. Personal OS에는
-          완료된 운동의 부위별 세트 수와 시간 수준의 projection만 동기화됩니다.
-          원본 입력과 상세 수정은 FitnessApp에서 수행하세요.
+          운동·식사·체중 원본은 Fitness App이 관리합니다. Personal OS에는
+          완료된 운동의 부위별 세트 수와 시간 요약만 동기화됩니다.
+          원본 입력과 상세 수정은 Fitness App에서 진행하세요.
         </p>
       </div>
 

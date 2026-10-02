@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { DevControlPanel, getDerivedProjectCardSummary } from "./DevControlPanel";
 import type { Project } from "../../types";
+import type { DevControlActions } from "./useDevControlActions";
 
 function project(): Project {
   return {
@@ -29,7 +30,7 @@ function project(): Project {
   };
 }
 
-function renderPanel(): { renderer: ReactTestRenderer; open: ReturnType<typeof vi.fn>; createProject: ReturnType<typeof vi.fn> } {
+function renderPanel(actions?: DevControlActions): { renderer: ReactTestRenderer; open: ReturnType<typeof vi.fn>; createProject: ReturnType<typeof vi.fn> } {
   const open = vi.fn();
   const createProject = vi.fn();
   const renderer = create(
@@ -42,6 +43,7 @@ function renderPanel(): { renderer: ReactTestRenderer; open: ReturnType<typeof v
       selectedProjectId={null}
       onOpenProjectWorkspace={open}
       onCreateProjectWorkspace={createProject}
+      actions={actions}
     />,
   );
   return { renderer, open, createProject };
@@ -65,6 +67,8 @@ describe("DevControlPanel command center", () => {
     const { renderer, open } = renderPanel();
 
     expect(renderer.root.findAllByType("form")).toHaveLength(0);
+    expect(renderer.root.findByType("h2").children.join("")).toBe("프로젝트");
+    expect(renderer.root.findAllByType("button").some((button) => button.children.join("") === "워크스트림")).toBe(true);
     expect(renderer.root.findAllByType("span").some((node) => node.children.join("") === "Personal OS")).toBe(true);
 
     act(() => {
@@ -85,5 +89,25 @@ describe("DevControlPanel command center", () => {
 
     expect(createProject).toHaveBeenCalledTimes(1);
     expect(renderer.root.findAllByType("form")).toHaveLength(0);
+  });
+
+  it("opens workstreams and preserves creating a shared project operation", () => {
+    const addWorkstream = vi.fn();
+    const { renderer } = renderPanel({ addWorkstream } as unknown as DevControlActions);
+    act(() => {
+      renderer.root.findAllByType("button").find((button) => button.children.join("") === "워크스트림")?.props.onClick();
+    });
+    act(() => {
+      renderer.root.findAllByType("button").find((button) => button.children.join("") === "새 워크스트림")?.props.onClick();
+    });
+    const form = renderer.root.findByType("form");
+    act(() => {
+      form.findByType("input").props.onChange({ target: { value: "공통 출시" } });
+      form.findByType("select").props.onChange({ target: { value: "ACTIVE" } });
+      renderer.root.findAllByType("input").find((input) => input.props.type === "checkbox")?.props.onChange();
+    });
+    act(() => form.props.onSubmit({ preventDefault: vi.fn() }));
+    expect(addWorkstream).toHaveBeenCalledWith({ name: "공통 출시", status: "ACTIVE", projectIds: ["project-1"] });
+    act(() => renderer.unmount());
   });
 });
