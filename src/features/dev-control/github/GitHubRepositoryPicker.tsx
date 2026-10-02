@@ -29,7 +29,7 @@ function formatDiagnostic(diagnostic: GitHubRepositoryListDiagnostic): string {
       .map((installation) => `${formatStatuses(installation.statuses)} (${installation.repositoryCount})`)
       .join(", ")
     : "-";
-  return `/user ${diagnostic.userStatus ?? "-"} (${diagnostic.userCount}) · /user/installations ${formatStatuses(diagnostic.installationStatuses)} (${diagnostic.installationCount}) · installation repositories ${repositoryRequests}`;
+  return `/user ${diagnostic.userStatus ?? "-"} (${diagnostic.userCount}) · /user/installations ${formatStatuses(diagnostic.installationStatuses)} (${diagnostic.installationCount}) · 설치별 저장소 ${repositoryRequests}`;
 }
 
 export function GitHubRepositoryPicker({
@@ -78,10 +78,10 @@ export function GitHubRepositoryPicker({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-[11px] font-medium text-slate-600 dark:text-neutral-300">
           {githubOwner && githubRepo
-            ? `선택된 Repository: ${githubOwner}/${githubRepo}`
+            ? `선택된 저장소: ${githubOwner}/${githubRepo}`
             : legacyRepository
-              ? `URL-only Repository: ${legacyRepository.owner}/${legacyRepository.repo}`
-              : "Repository를 선택하세요."}
+              ? `주소로 연결된 저장소: ${legacyRepository.owner}/${legacyRepository.repo}`
+              : "저장소를 선택하세요."}
         </span>
         {integration.status.connected ? (
           <button
@@ -102,7 +102,7 @@ export function GitHubRepositoryPicker({
 
       <div className="grid grid-cols-2 gap-2">
         <label className="grid gap-1 text-[11px] font-medium text-slate-600 dark:text-neutral-300">
-          <span>Repository URL (호환)</span>
+          <span>저장소 주소 (호환)</span>
           <input
             className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-xs dark:border-neutral-700 dark:bg-neutral-950"
             value={repository}
@@ -111,7 +111,7 @@ export function GitHubRepositoryPicker({
           />
         </label>
         <label className="grid gap-1 text-[11px] font-medium text-slate-600 dark:text-neutral-300">
-          <span>Tracked branch</span>
+          <span>추적 브랜치</span>
           {githubOwner && githubRepo && integration.branches.length > 0 ? (
             <select
               className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-xs dark:border-neutral-700 dark:bg-neutral-950"
@@ -123,7 +123,7 @@ export function GitHubRepositoryPicker({
               ) : null}
               {integration.branches.map((option) => (
                 <option key={option.name} value={option.name}>
-                  {option.name}{option.protected ? " · protected" : ""}
+                  {option.name}{option.protected ? " · 보호됨" : ""}
                 </option>
               ))}
             </select>
@@ -145,7 +145,7 @@ export function GitHubRepositoryPicker({
               autoFocus
               className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1.5 text-xs dark:border-neutral-700 dark:bg-neutral-900"
               value={search}
-              placeholder="owner/repository 검색"
+              placeholder="소유자/저장소 검색"
               onChange={(event) => setSearch(event.target.value)}
               onKeyDown={handleSearchKeyDown}
             />
@@ -165,28 +165,28 @@ export function GitHubRepositoryPicker({
               <p aria-live="polite" className="p-2 text-[11px] text-slate-500">저장소를 불러오는 중...</p>
             ) : repositoryLoadState.error || repositoryDiagnostic?.state === "api-error" ? (
               <p role="alert" className="p-2 text-[11px] text-rose-700 dark:text-rose-300">
-                GitHub API 오류: {repositoryLoadState.error ?? repositoryDiagnostic?.error?.message ?? "Repository 목록을 불러오지 못했습니다."}
+                GitHub API 오류: {repositoryLoadState.error ?? repositoryDiagnostic?.error?.message ?? "저장소 목록을 불러오지 못했습니다."}
               </p>
             ) : repositoryDiagnostic?.state === "no-installations" ? (
-              <p className="p-2 text-[11px] text-slate-500">GitHub App installation이 없습니다. App을 설치하고 Repository 접근 권한을 부여하세요.</p>
+              <p className="p-2 text-[11px] text-slate-500">설치된 GitHub 앱이 없습니다. 앱을 설치하고 저장소 접근 권한을 부여하세요.</p>
             ) : repositoryDiagnostic?.state === "no-repositories" ? (
-              <p className="p-2 text-[11px] text-slate-500">GitHub App installation은 있지만 현재 사용자에게 허용된 Repository가 없습니다.</p>
+              <p className="p-2 text-[11px] text-slate-500">GitHub 앱이 설치되어 있지만 현재 사용자에게 허용된 저장소가 없습니다.</p>
             ) : repositoryDiagnostic?.state === "no-search-results" ? (
-              <p className="p-2 text-[11px] text-slate-500">접근 가능한 Repository는 있지만 현재 검색어와 일치하는 결과가 없습니다.</p>
+              <p className="p-2 text-[11px] text-slate-500">접근 가능한 저장소는 있지만 현재 검색어와 일치하는 결과가 없습니다.</p>
             ) : integration.repositories.length === 0 ? (
               <p className="p-2 text-[11px] text-slate-500">저장소 검색을 시작하세요.</p>
             ) : (
               integration.repositories.map((option) => (
                 <button
                   key={option.id}
-                  aria-label={`GitHub Repository ${option.fullName}`}
+                  aria-label={`GitHub 저장소 ${option.fullName}`}
                   type="button"
                   onClick={() => selectRepository(option)}
                   className={`grid gap-0.5 rounded border p-2 text-left text-[11px] hover:border-teal-500 ${githubRepositoryId === option.id ? "border-teal-500 bg-teal-50 dark:bg-teal-950/30" : "border-slate-200 dark:border-neutral-800"}`}
                 >
                   <span className="font-semibold">{option.fullName}</span>
                   <span className="text-slate-500">
-                    기본 branch: {option.defaultBranch}{option.private ? " · private" : ""}
+                    기본 브랜치: {option.defaultBranch}{option.private ? " · 비공개" : ""}
                   </span>
                 </button>
               ))

@@ -23,7 +23,7 @@ export function GitHubConnectionBar({
               ? `연결됨${accountLabel ? ` · ${accountLabel}` : ""}`
               : status.configured
                 ? "연결되지 않음"
-                : "Client ID 설정 필요"}
+                : "클라이언트 ID 설정 필요"}
           </p>
         </div>
         {status.connected ? (
@@ -65,14 +65,14 @@ export function GitHubConnectionBar({
             rel="noreferrer"
             className="font-semibold text-teal-700 underline dark:text-teal-300"
           >
-            {status.connected ? "저장소 선택/권한 관리" : "GitHub App 설치/저장소 권한 관리"}
+            {status.connected ? "저장소 선택/권한 관리" : "GitHub 앱 설치/저장소 권한 관리"}
           </a>
         </div>
       ) : null}
 
       {!status.configured && !statusCheckError ? (
         <p className="text-[11px] leading-4 text-slate-500 dark:text-neutral-400">
-          앱 설정 파일에 공개 GitHub Client ID를 추가하면 Device Flow를 사용할 수 있습니다.
+          설정에서 공개 GitHub 클라이언트 ID를 추가하면 기기 인증으로 연결할 수 있습니다.
         </p>
       ) : null}
 

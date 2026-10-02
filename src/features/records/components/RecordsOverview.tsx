@@ -1,9 +1,7 @@
 import {
   Activity,
-  Flame,
+  ChevronDown,
   Salad,
-  Scale,
-  Target,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -14,10 +12,6 @@ import {
   BACKFILL_LABEL,
   hasBackfillMetadata,
 } from "../../../lib/dataTrust/backfillMetadata";
-import {
-  formatFitnessProjectionLabels,
-  getFitnessSummary,
-} from "../../fitness-summary/fitnessSummary";
 import { formatKoreanDate } from "../../fitness/fitnessDate";
 import { formatMetric } from "../../fitness/stats/fitnessStats";
 import {
@@ -28,16 +22,10 @@ import {
   getRecordsForDate,
   getWeightSeries,
 } from "../recordAggregation";
-import {
-  formatNullableMetric,
-  getWeightDeltaLabel,
-} from "../recordDisplayFormatters";
 import { useChartInteraction } from "../hooks/useChartInteraction";
 import {
   BarSeries,
-  BriefMetric,
   ChartCard,
-  KpiCard,
   WeightLine,
 } from "./InteractiveRecordsMetrics";
 
@@ -46,19 +34,6 @@ interface RecordsOverviewProps {
   snapshot: LocalDataSnapshot;
   syncStatus: SyncStatus;
   today: string;
-}
-
-function formatOptionalKg(value: number | null): string {
-  return value === null ? "-" : `${formatMetric(value)} kg`;
-}
-
-function formatSignedKg(value: number | null): string {
-  if (value === null) {
-    return "-";
-  }
-
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${formatMetric(value)} kg`;
 }
 
 function summarizeItems(items: string[], emptyText: string): string {
@@ -76,21 +51,11 @@ function summarizeItems(items: string[], emptyText: string): string {
 export function RecordsOverview({
   selectedDate,
   snapshot,
-  syncStatus,
-  today,
 }: RecordsOverviewProps) {
   const selectedRange = useMemo(() => getMonthRange(selectedDate), [selectedDate]);
-  const todayRecords = useMemo(
-    () => getRecordsForDate(snapshot, today),
-    [snapshot, today],
-  );
   const dashboardStats = useMemo(
     () => getDashboardStats(snapshot, selectedRange),
     [selectedRange, snapshot],
-  );
-  const fitnessSummary = useMemo(
-    () => getFitnessSummary(snapshot, today),
-    [snapshot, today],
   );
   const productivitySeries = useMemo(
     () => getProductivitySeries(snapshot.tasks, selectedRange),
@@ -107,12 +72,6 @@ export function RecordsOverview({
   const productivityInteraction = useChartInteraction(productivitySeries.length);
   const nutritionInteraction = useChartInteraction(nutritionSeries.length);
   const weightInteraction = useChartInteraction(weightSeries.length);
-  const todayPlannedTasks = snapshot.tasks.filter(
-    (task) => task.deletedAt === null && task.plannedDate === today,
-  );
-  const todayLeftTasks = todayPlannedTasks.filter((task) => !task.isDone).length;
-  const todayDoneTasks = todayPlannedTasks.filter((task) => task.isDone).length;
-  const hasTodayWorkout = todayRecords.workoutRecords.length > 0;
   const hasProductivityData = productivitySeries.some(
     (point) => point.totalTasks > 0,
   );
@@ -123,14 +82,6 @@ export function RecordsOverview({
     dashboardStats.backfilledTaskCount > 0
       ? `${dashboardStats.completedTasks}/${dashboardStats.totalTasks} 완료 · ${BACKFILL_LABEL} ${dashboardStats.backfilledTaskCount}건 제외`
       : `${dashboardStats.completedTasks}/${dashboardStats.totalTasks} 완료`;
-  const mealStatsDetail =
-    dashboardStats.backfilledMealCount > 0
-      ? `선택 월 식사 기준 · ${BACKFILL_LABEL} ${dashboardStats.backfilledMealCount}건 포함`
-      : "선택 월 식사 기준";
-  const weightStatsDetail =
-    dashboardStats.backfilledWeightCount > 0
-      ? `${BACKFILL_LABEL} ${dashboardStats.backfilledWeightCount}건 포함`
-      : null;
   const activeProductivityPoint =
     productivityInteraction.activeIndex === null
       ? null
@@ -222,171 +173,22 @@ export function RecordsOverview({
   );
 
   return (
-    <>
-      <div className="rounded-md border border-slate-300 bg-slate-950 p-3 text-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[11px] font-semibold uppercase tracking-normal text-cyan-300">
-              Life Command Center
-            </div>
-            <h2 className="mt-1 truncate text-lg font-semibold tracking-normal">
-              오늘의 지휘판
-            </h2>
-            <p className="mt-1 truncate text-xs text-slate-300">
-              {formatKoreanDate(today)}
-            </p>
-          </div>
-
-          <div className="flex shrink-0 flex-col items-end gap-1 text-right">
-            <span className="rounded-full border border-cyan-400/40 bg-cyan-400/10 px-2 py-0.5 text-[11px] font-semibold text-cyan-100">
-              {syncStatus.label}
-            </span>
-            <span className="text-[11px] text-slate-400">
-              {syncStatus.isOnline ? "online" : "offline"}
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <BriefMetric label="남은 일" value={`${todayLeftTasks}개`} />
-          <BriefMetric label="완료" value={`${todayDoneTasks}개`} />
-          <BriefMetric label="운동" value={hasTodayWorkout ? "기록 있음" : "없음"} />
-        </div>
-      </div>
-
-      <div className="grid shrink-0 grid-cols-2 gap-2">
-        <KpiCard
-          icon={Target}
-          label="생산성"
-          value={
-            dashboardStats.productivityScore === null
-              ? "—"
-              : `${dashboardStats.productivityScore}%`
-          }
-          detail={productivityDetail}
-          tone="blue"
-        />
-        <KpiCard
-          icon={Flame}
-          label="평균 칼로리"
-          value={formatNullableMetric(dashboardStats.averageCalories, "kcal")}
-          detail={mealStatsDetail}
-          tone="amber"
-        />
-        <KpiCard
-          icon={Salad}
-          label="평균 단백질"
-          value={formatNullableMetric(dashboardStats.averageProteinGrams, "g", 1)}
-          detail={mealStatsDetail}
-          tone="emerald"
-        />
-        <KpiCard
-          icon={Scale}
-          label="체중 변화"
-          value={getWeightDeltaLabel(dashboardStats.weightDeltaKg)}
-          detail={
-            dashboardStats.latestWeightKg === null
-              ? "체중 기록 없음"
-              : weightStatsDetail
-                ? `최근 ${formatMetric(dashboardStats.latestWeightKg)} kg · ${weightStatsDetail}`
-                : `최근 ${formatMetric(dashboardStats.latestWeightKg)} kg`
-          }
-          tone="violet"
-        />
-      </div>
-
-      <div className="rounded-md border border-slate-300 bg-white p-3 text-slate-900 dark:border-neutral-800 dark:bg-black dark:text-neutral-100">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[11px] font-semibold uppercase tracking-normal text-red-600 dark:text-red-300">
-              Fitness Summary
-            </div>
-            <h3 className="mt-1 truncate text-sm font-semibold">
-              Read-only OS view
-            </h3>
-            <p className="mt-1 text-xs text-slate-500 dark:text-neutral-400">
-              Detail edits stay in Fitness app. OS only shows summary and link state.
-            </p>
-          </div>
-          <span className="shrink-0 rounded-full border border-slate-300 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-neutral-700 dark:text-neutral-300">
-            {fitnessSummary.todayHasWorkout ? "Workout today" : "No workout today"}
-          </span>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <BriefMetric
-            label="7d workouts"
-            value={`${fitnessSummary.weeklyWorkoutCount}`}
-          />
-          <BriefMetric
-            label="Latest weight"
-            value={formatOptionalKg(fitnessSummary.latestWeightKg)}
-          />
-          <BriefMetric
-            label="Weight delta"
-            value={formatSignedKg(fitnessSummary.weightDeltaKg)}
-          />
-          <BriefMetric
-            label="Meal status"
-            value={fitnessSummary.todayHasMeal ? "Logged today" : "No meal today"}
-          />
-        </div>
-
-        <div className="mt-3 space-y-2 text-xs text-slate-600 dark:text-neutral-300">
-          <p>
-            <span className="font-semibold text-slate-800 dark:text-neutral-100">
-              Recent:
-            </span>{" "}
-            {summarizeItems(
-              fitnessSummary.recentWorkouts.map(
-                (record) =>
-                  `${record.date} ${formatFitnessProjectionLabels(record).join(" · ")}`,
-              ),
-              "No recent workout sessions.",
-            )}
-          </p>
-          <p>
-            <span className="font-semibold text-slate-800 dark:text-neutral-100">
-              Strength summary:
-            </span>{" "}
-            {summarizeItems(
-              fitnessSummary.weeklyStrengthSetSummaries,
-              "No weekly strength summary.",
-            )}
-          </p>
-          <p>
-            <span className="font-semibold text-slate-800 dark:text-neutral-100">
-              Latest meal:
-            </span>{" "}
-            {fitnessSummary.latestMeal
-              ? `${fitnessSummary.latestMeal.date} ${fitnessSummary.latestMeal.menu}`
-              : "No meal record."}
-          </p>
-        </div>
-
-        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
-          <div className="font-semibold">공유 운동 기록 상태</div>
-          <div className="mt-1">
-            공유 {fitnessSummary.connection.linkedCount} / Personal OS 생성{" "}
-            {fitnessSummary.connection.quickRecordOnlyCount} / 진행 중 비공개{" "}
-            {fitnessSummary.connection.possibleMismatchCount}
-          </div>
-          <div className="mt-1">{fitnessSummary.connection.message}</div>
-        </div>
-
-        <button
-          type="button"
-          disabled
-          className="mt-3 inline-flex h-8 items-center rounded-md border border-slate-200 px-3 text-xs font-semibold text-slate-400 dark:border-neutral-800 dark:text-neutral-500"
-          title="Fitness app deep link is not wired in this phase."
-        >
-          Open Fitness app for detail edits
-        </button>
-      </div>
-
-      <div className="grid shrink-0 gap-2">
+    <details className="group shrink-0 rounded-md border border-slate-300 bg-white dark:border-neutral-800 dark:bg-black">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-md p-3 text-sm font-semibold text-slate-800 transition-colors duration-150 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60 dark:text-neutral-200 dark:hover:bg-neutral-900 [&::-webkit-details-marker]:hidden">
+        <span>월간 흐름</span>
+        <span className="flex items-center gap-2 text-xs font-normal text-slate-500 dark:text-neutral-400">
+          {selectedRange.startDate.slice(0, 4)}년{" "}
+          {Number(selectedRange.startDate.slice(5, 7))}월
+          <ChevronDown className="h-4 w-4 transition-transform duration-150 group-open:rotate-180" aria-hidden="true" />
+        </span>
+      </summary>
+      <div className="grid gap-2 border-t border-slate-200 p-3 dark:border-neutral-800">
+        <p className="text-xs text-slate-500 dark:text-neutral-400">
+          {productivityDetail} · 할 일 완료율은 {BACKFILL_LABEL}을 제외합니다.
+          식사·체중 흐름에는 누락 보강을 포함합니다.
+        </p>
         <ChartCard
-          title="생산성 흐름"
+          title="할 일 완료 흐름"
           icon={Activity}
           detail={productivityChartDetail}
           caption={hasProductivityData ? "선택 월 완료율" : "선택 월에 할 일이 없습니다."}
@@ -438,6 +240,6 @@ export function RecordsOverview({
           />
         </ChartCard>
       </div>
-    </>
+    </details>
   );
 }

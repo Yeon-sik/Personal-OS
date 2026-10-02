@@ -55,7 +55,7 @@ describe("SupabaseSettingsSection", () => {
     );
 
     expect(text).toContain("앱에서 관리되는 Supabase 연결");
-    expect(text).toContain("사용자별 Auth account");
+    expect(text).toContain("사용자별 인증 계정");
     expect(text).not.toContain("수동 Supabase 연결");
     expect(urlInputs).toHaveLength(0);
     expect(renderer.root.findAllByType("input")).toHaveLength(2);
@@ -77,7 +77,7 @@ describe("SupabaseSettingsSection", () => {
     );
 
     expect(text).toContain("수동 Supabase 연결");
-    expect(text).toContain("로컬 fallback");
+    expect(text).toContain("로컬 대체 설정");
     expect(urlInputs).toHaveLength(1);
 
     act(() => renderer.unmount());

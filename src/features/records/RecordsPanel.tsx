@@ -102,13 +102,6 @@ export function RecordsPanel({
 
   return (
     <section className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
-      <RecordsOverview
-        selectedDate={selectedDate}
-        snapshot={snapshot}
-        syncStatus={syncStatus}
-        today={today}
-      />
-
       <RecordCalendar
         markerByDate={markerByDate}
         financeByDate={financeByDate}
@@ -135,6 +128,13 @@ export function RecordsPanel({
         onToggleTask={onToggleTask}
         records={selectedRecords}
         selectedDate={selectedDate}
+        today={today}
+      />
+
+      <RecordsOverview
+        selectedDate={selectedDate}
+        snapshot={snapshot}
+        syncStatus={syncStatus}
         today={today}
       />
 

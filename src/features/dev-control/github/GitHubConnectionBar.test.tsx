@@ -49,7 +49,7 @@ describe("GitHubConnectionBar status messaging", () => {
   it("shows Client ID setup only for a successful not-configured status", () => {
     const text = renderedText(createIntegration());
 
-    expect(text).toContain("Client ID 설정 필요");
+    expect(text).toContain("클라이언트 ID 설정 필요");
     expect(text).not.toContain("GitHub 연결 상태 확인 실패");
   });
 
@@ -60,7 +60,7 @@ describe("GitHubConnectionBar status messaging", () => {
 
     expect(text).toContain("GitHub 연결 상태 확인 실패");
     expect(text).toContain("Command github_connection_status not allowed by ACL");
-    expect(text).not.toContain("Client ID 설정 필요");
+    expect(text).not.toContain("클라이언트 ID 설정 필요");
   });
 
   it("treats a status response carrying a network error as a status lookup failure", () => {

@@ -30,11 +30,11 @@ export function DbEditorLauncher() {
           />
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-slate-900 dark:text-neutral-100">
-              Supabase DB Editor
+              Supabase 데이터 편집기
             </h2>
             <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-neutral-400">
-              별도 전체 폭 창에서 PAT로 접근 가능한 프로젝트와 테이블을
-              읽고, PK가 있는 한 행의 변경 컬럼만 수정합니다.
+              별도 전체 폭 창에서 개인 액세스 토큰으로 접근 가능한 프로젝트와 테이블을
+              읽고, 기본 키가 있는 한 행의 변경 컬럼만 수정합니다.
             </p>
           </div>
         </div>
