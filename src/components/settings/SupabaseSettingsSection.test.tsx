@@ -14,7 +14,10 @@ const syncStatus: SyncStatus = {
   isConfigured: true,
 };
 
-function renderSection(supabaseConfig: RuntimeConfig): ReactTestRenderer {
+function renderSection(
+  supabaseConfig: RuntimeConfig,
+  status: SyncStatus = syncStatus,
+): ReactTestRenderer {
   let renderer: ReactTestRenderer | undefined;
 
   act(() => {
@@ -27,7 +30,7 @@ function renderSection(supabaseConfig: RuntimeConfig): ReactTestRenderer {
           supabaseConfig.supabaseUrl && supabaseConfig.supabaseAnonKey,
         )}
         supabaseConfig={supabaseConfig}
-        syncStatus={syncStatus}
+        syncStatus={status}
         userId="local-user"
         onManualSync={vi.fn(async () => undefined)}
         onSaveSupabaseConfig={vi.fn(async () => undefined)}
@@ -59,6 +62,39 @@ describe("SupabaseSettingsSection", () => {
     expect(text).not.toContain("수동 Supabase 연결");
     expect(urlInputs).toHaveLength(0);
     expect(renderer.root.findAllByType("input")).toHaveLength(2);
+
+    act(() => renderer.unmount());
+  });
+
+  it("shows separate Fitness read-model diagnostics and their error details", () => {
+    const renderer = renderSection(
+      {
+        supabaseUrl: "https://shared-project.supabase.co",
+        supabaseAnonKey: "shared-anon-key",
+        boundUserId: "",
+        loaded: true,
+        sourcePath: "build environment",
+      },
+      {
+        ...syncStatus,
+        detail: "Fitness read model 부분 실패: nutrition",
+        fitnessReadModels: {
+          workout: { state: "connected", detail: "fitness_summary_projections_v2: 2개 row" },
+          nutrition: { state: "error", detail: "migration 20260922090000_fitness_nutrition_summary_v1.sql 적용 필요" },
+          weight: { state: "empty", detail: "weight_records: row 없음" },
+        },
+      },
+    );
+    const text = JSON.stringify(renderer.toJSON());
+
+    expect(text).toContain("Fitness read models");
+    expect(text).toContain("workout");
+    expect(text).toContain("connected");
+    expect(text).toContain("nutrition");
+    expect(text).toContain("error");
+    expect(text).toContain("weight");
+    expect(text).toContain("empty");
+    expect(text).toContain("20260922090000_fitness_nutrition_summary_v1.sql");
 
     act(() => renderer.unmount());
   });

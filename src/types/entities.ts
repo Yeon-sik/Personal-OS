@@ -61,8 +61,8 @@ export interface WorkoutRecord extends SyncableEntity, ScopedRecordFields {
 
 /**
  * Frozen Fitness Record Contract v1 reader shape. This remains available only
- * for legacy storage/sync compatibility; normal Personal OS features must use
- * FitnessSummaryProjectionV2 instead.
+ * for legacy storage/sync compatibility; category-only display is allowed
+ * when the Fitness-owned v2 projection has not been published yet.
  */
 export interface LegacyWorkoutRecordV1 extends WorkoutRecord {
   exerciseName: string;
@@ -220,6 +220,8 @@ export interface LocalDataSnapshot {
   tasks: Task[];
   /** Frozen v1 source rows retained only as a local compatibility archive. */
   workoutRecords: LegacyWorkoutRecordV1[];
+  /** Authenticated Fitness-owned v1 read model, separate from local archives. */
+  fitnessSharedWorkoutRecords?: LegacyWorkoutRecordV1[];
   fitnessSummaryProjections: FitnessSummaryProjectionV2[];
   /** Absent in old caches; full owner-view reads replace this collection. */
   fitnessNutritionSummaries?: FitnessNutritionSummaryV1[];

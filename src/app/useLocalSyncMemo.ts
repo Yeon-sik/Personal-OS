@@ -69,6 +69,19 @@ export function useLocalSyncMemo(
         }),
     [runtime.snapshot.fitnessSummaryProjections],
   );
+  const visibleFitnessSharedWorkoutRecords = useMemo(() => {
+    const projectedSessionIds = new Set(
+      runtime.snapshot.fitnessSummaryProjections.map(
+        (projection) => projection.sourceFitnessSessionId,
+      ),
+    );
+    return (runtime.snapshot.fitnessSharedWorkoutRecords ?? []).filter(
+      (record) => !projectedSessionIds.has(record.id),
+    );
+  }, [
+    runtime.snapshot.fitnessSharedWorkoutRecords,
+    runtime.snapshot.fitnessSummaryProjections,
+  ]);
   const selectedNote = useMemo(
     () =>
       visibleNotes.find((note) => note.id === runtime.selectedNoteId) ?? null,
@@ -121,6 +134,7 @@ export function useLocalSyncMemo(
     projects: visibleProjects,
     error: runtime.error,
     fitnessSummaryProjections: visibleFitnessSummaryProjections,
+    fitnessSharedWorkoutRecords: visibleFitnessSharedWorkoutRecords,
     fitnessNutritionSummaries: runtime.snapshot.fitnessNutritionSummaries,
     fitnessWeightRecords: runtime.snapshot.fitnessWeightRecords ?? [],
     isAuthenticated: runtime.isAuthenticated,

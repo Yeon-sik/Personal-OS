@@ -1,11 +1,10 @@
 import type {
-  FitnessSummaryProjectionV2,
   MealRecord,
   WeightRecord,
 } from "../../../types";
 import { countBackfilledRecords } from "../../../lib/dataTrust/backfillMetadata";
 import { isWithinDateRange } from "../fitnessDate";
-import { formatFitnessProjectionLabels } from "../../fitness-summary/fitnessSummary";
+import { formatSharedWorkoutLabels, type SharedWorkoutSummary } from "../../fitness-summary/sharedWorkoutSummaries";
 
 export interface FitnessStats {
   workoutTotal: number;
@@ -72,7 +71,7 @@ export function getRecordsInRange<T extends { date: string; deletedAt?: string |
 }
 
 export function calculateFitnessStats(
-  workoutRecords: FitnessSummaryProjectionV2[],
+  workoutRecords: SharedWorkoutSummary[],
   mealRecords: MealRecord[],
   weightRecords: WeightRecord[],
   startDate: string,
@@ -84,7 +83,7 @@ export function calculateFitnessStats(
   const weightValues = rangedWeights.map((record) => record.weightKg);
   const workoutBySubcategory = countBy(
     rangedWorkouts,
-    (record) => formatFitnessProjectionLabels(record).join(" · "),
+    (record) => formatSharedWorkoutLabels(record).join(" · "),
   );
 
   return {

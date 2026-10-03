@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SyncContext } from "../syncTypes";
-import { noteToRow } from "./mappers";
+import { noteToRow, workoutRecordToRow } from "./mappers";
 import type { SnapshotTableName } from "./rows";
 import {
   createPushPayload,
@@ -34,6 +34,7 @@ import {
 } from "./testFixtures";
 
 class FakeSnapshotTransport implements SnapshotTransport {
+  fitnessReadModels?: SnapshotTransport["fitnessReadModels"];
   readonly selectCalls: Array<{ tableName: SnapshotTableName; userId: string }> = [];
   readonly upsertCalls: Array<{
     tableName: SnapshotTableName;
@@ -65,6 +66,55 @@ class FakeSnapshotTransport implements SnapshotTransport {
 const context: SyncContext = {
   userId: "user-1",
   device: makeDevice({ id: "device-a" }),
+};
+
+const workoutProjectionRow = {
+  id: "projection-1",
+  user_id: "user-1",
+  source_fitness_session_id: "session-1",
+  date: "2026-08-02",
+  completion_status: "completed",
+  chest_sets: 4,
+  back_sets: 0,
+  legs_sets: 0,
+  shoulders_sets: 0,
+  abs_sets: 0,
+  triceps_sets: 0,
+  biceps_sets: 0,
+  total_duration_seconds: 1800,
+  cardio_duration_seconds: null,
+  contract_version: 2,
+  created_at: "2026-08-02T00:00:00.000Z",
+  updated_at: "2026-08-02T00:00:00.000Z",
+  deleted_at: null,
+  device_id: "fitness-phone",
+};
+
+const nutritionSummaryRow = {
+  id: "2026-08-02",
+  user_id: "user-1",
+  date: "2026-08-02",
+  contract_version: 1,
+  meal_count: 1,
+  calories: 600,
+  carbs_grams: 70,
+  protein_grams: 40,
+  fat_grams: 20,
+  updated_at: "2026-08-02T00:00:00.000Z",
+};
+
+const fitnessWeightRow = {
+  id: "fitness-weight-live",
+  user_id: "user-1",
+  date: "2026-08-02",
+  weight_kg: 72,
+  source_app: "fitness",
+  scope: "fitness",
+  metadata: {},
+  contract_version: 1,
+  updated_at: "2026-08-02T00:00:00.000Z",
+  deleted_at: null,
+  device_id: "fitness-phone",
 };
 
 describe("Supabase snapshot IO", () => {
@@ -101,6 +151,7 @@ describe("Supabase snapshot IO", () => {
       "tasks",
       "fitness_nutrition_summary_v1",
       "fitness_summary_projections_v2",
+      "workout_records",
       "weight_records",
       "devices",
       "projects",
@@ -159,6 +210,7 @@ describe("Supabase snapshot IO", () => {
       "tasks",
       "fitness_nutrition_summary_v1",
       "fitness_summary_projections_v2",
+      "workout_records",
       "weight_records",
       "devices",
       "projects",
@@ -175,6 +227,104 @@ describe("Supabase snapshot IO", () => {
       "knowledge_documents",
     ]);
     expect(result.notes[0].content).toBe("remote");
+  });
+
+  it("reads completed Fitness v1 rows with a missing contract column without pushing them", async () => {
+    const transport = new FakeSnapshotTransport();
+    const shared = makeWorkoutRecord({
+      id: "fitness-legs",
+      category: "하체",
+      sourceApp: "fitness",
+      scope: "both",
+      metadata: { status: "completed" },
+    });
+    const fitnessOnly = makeWorkoutRecord({
+      ...shared,
+      id: "fitness-only",
+      scope: "fitness",
+    });
+    const inProgress = makeWorkoutRecord({
+      ...shared,
+      id: "in-progress",
+      metadata: { status: "in_progress" },
+    });
+    const deleted = makeWorkoutRecord({
+      ...shared,
+      id: "deleted",
+      deletedAt: "2026-08-03T00:00:00.000Z",
+    });
+    const row = workoutRecordToRow(shared, context.userId);
+    delete (row as { contract_version?: number }).contract_version;
+    transport.selectedRows.set("workout_records", {
+      data: [
+        row,
+        workoutRecordToRow(fitnessOnly, context.userId),
+        workoutRecordToRow(inProgress, context.userId),
+        workoutRecordToRow(deleted, context.userId),
+      ],
+      error: null,
+    });
+
+    const result = await pullSnapshot(transport, makeSnapshot(), context.userId);
+    expect(result.workoutRecords).toEqual([]);
+    expect(result.fitnessSharedWorkoutRecords).toMatchObject([{
+      id: "fitness-legs",
+      category: "하체",
+      contractVersion: 1,
+    }]);
+    expect(transport.fitnessReadModels?.workout.state).toBe("connected");
+
+    await pushSnapshot(transport, result, context, shared.updatedAt);
+    expect(transport.upsertCalls.map((call) => call.tableName)).not.toContain("workout_records");
+  });
+
+  it("filters cached Fitness v1 rows when the remote read fails", async () => {
+    const transport = new FakeSnapshotTransport();
+    transport.selectedRows.set("workout_records", {
+      data: null,
+      error: { code: "42501", message: "workout_records RLS denied" },
+    });
+    const shared = makeWorkoutRecord({
+      id: "shared-legs",
+      sourceApp: "fitness",
+      scope: "both",
+      category: "하체",
+      metadata: { status: "completed" },
+    });
+    const privateRecord = makeWorkoutRecord({
+      ...shared,
+      id: "private-legs",
+      scope: "fitness",
+    });
+
+    const result = await pullSnapshot(
+      transport,
+      makeSnapshot({ fitnessSharedWorkoutRecords: [shared, privateRecord] }),
+      context.userId,
+    );
+
+    expect(result.fitnessSharedWorkoutRecords?.map((record) => record.id))
+      .toEqual(["shared-legs"]);
+  });
+
+  it("replaces only the remote Fitness read model after an empty pull", async () => {
+    const archived = makeWorkoutRecord({ id: "local-archive" });
+    const staleShared = makeWorkoutRecord({
+      id: "old-remote",
+      sourceApp: "fitness",
+      scope: "both",
+      metadata: { status: "completed" },
+    });
+    const result = await pullSnapshot(
+      new FakeSnapshotTransport(),
+      makeSnapshot({
+        workoutRecords: [archived],
+        fitnessSharedWorkoutRecords: [staleShared],
+      }),
+      context.userId,
+    );
+    expect(result.workoutRecords).toEqual([archived]);
+    expect(result.fitnessSharedWorkoutRecords).toEqual([]);
   });
 
   it("pulls read-only weights while preserving legacy workout and meal archives", async () => {
@@ -226,9 +376,111 @@ describe("Supabase snapshot IO", () => {
     expect(pulledTables).toContain("fitness_summary_projections_v2");
     expect(pulledTables).toContain("fitness_nutrition_summary_v1");
     expect(pulledTables).toContain("weight_records");
-    expect(pulledTables).not.toContain("workout_records");
+    expect(pulledTables).toContain("workout_records");
     expect(pulledTables).not.toContain("meal_records");
   });
+  it.each([
+    {
+      name: "missing nutrition view (404)",
+      error: {
+        code: "PGRST205",
+        status: 404,
+        message: "Could not find the table 'public.fitness_nutrition_summary_v1' in the schema cache",
+      },
+      detail: "20260922090000_fitness_nutrition_summary_v1.sql",
+    },
+    {
+      name: "nutrition permission/RLS denial",
+      error: {
+        code: "42501",
+        status: 403,
+        message: "permission denied for view fitness_nutrition_summary_v1",
+      },
+      detail: "인증/권한/RLS",
+    },
+  ])("keeps workout and weight available after $name", async ({ error, detail }) => {
+    const transport = new FakeSnapshotTransport();
+    transport.selectedRows.set("fitness_nutrition_summary_v1", { data: null, error });
+    transport.selectedRows.set("fitness_summary_projections_v2", {
+      data: [workoutProjectionRow], error: null,
+    });
+    transport.selectedRows.set("weight_records", { data: [fitnessWeightRow], error: null });
+    const cachedNutrition = {
+      id: "2026-08-01",
+      date: "2026-08-01",
+      contractVersion: 1 as const,
+      mealCount: 1,
+      calories: 500,
+      carbsGrams: 40,
+      proteinGrams: 30,
+      fatGrams: 10,
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    };
+
+    const result = await pullSnapshot(
+      transport,
+      makeSnapshot({ fitnessNutritionSummaries: [cachedNutrition] }),
+      context.userId,
+    );
+
+    expect(result.fitnessSummaryProjections.map((row) => row.id)).toContain("projection-1");
+    expect(result.fitnessWeightRecords?.map((row) => row.id)).toContain("fitness-weight-live");
+    expect(result.fitnessNutritionSummaries).toEqual([cachedNutrition]);
+    expect(transport.fitnessReadModels).toMatchObject({
+      workout: { state: "connected" },
+      nutrition: { state: "error" },
+      weight: { state: "connected" },
+    });
+    expect(transport.fitnessReadModels?.nutrition.detail).toContain(detail);
+  });
+
+  it("keeps nutrition and weight available when the workout projection query fails", async () => {
+    const transport = new FakeSnapshotTransport();
+    transport.selectedRows.set("fitness_summary_projections_v2", {
+      data: null,
+      error: { code: "42501", status: 403, message: "workout projection RLS denied" },
+    });
+    transport.selectedRows.set("fitness_nutrition_summary_v1", {
+      data: [nutritionSummaryRow], error: null,
+    });
+    transport.selectedRows.set("weight_records", { data: [fitnessWeightRow], error: null });
+
+    const result = await pullSnapshot(transport, makeSnapshot(), context.userId);
+
+    expect(result.fitnessSummaryProjections).toEqual([]);
+    expect(result.fitnessNutritionSummaries?.map((row) => row.id)).toContain("2026-08-02");
+    expect(result.fitnessWeightRecords?.map((row) => row.id)).toContain("fitness-weight-live");
+    expect(transport.fitnessReadModels).toMatchObject({
+      workout: { state: "error" },
+      nutrition: { state: "connected" },
+      weight: { state: "connected" },
+    });
+  });
+
+  it("keeps workout and nutrition available when the weight query fails", async () => {
+    const transport = new FakeSnapshotTransport();
+    transport.selectedRows.set("fitness_summary_projections_v2", {
+      data: [workoutProjectionRow], error: null,
+    });
+    transport.selectedRows.set("fitness_nutrition_summary_v1", {
+      data: [nutritionSummaryRow], error: null,
+    });
+    transport.selectedRows.set("weight_records", {
+      data: null,
+      error: { code: "42501", status: 403, message: "weight_records RLS denied" },
+    });
+
+    const result = await pullSnapshot(transport, makeSnapshot(), context.userId);
+
+    expect(result.fitnessSummaryProjections.map((row) => row.id)).toContain("projection-1");
+    expect(result.fitnessNutritionSummaries?.map((row) => row.id)).toContain("2026-08-02");
+    expect(transport.fitnessReadModels).toMatchObject({
+      workout: { state: "connected" },
+      nutrition: { state: "connected" },
+      weight: { state: "error" },
+    });
+  });
+
   it("removes nutrition dates omitted by the next full view pull", async () => {
     const transport = new FakeSnapshotTransport();
     transport.selectedRows.set("fitness_nutrition_summary_v1", { data: [], error: null });

@@ -50,6 +50,7 @@ export function mergeSnapshot(
     fitnessNutritionSummaries: incomingSnapshot.fitnessNutritionSummaries ?? localSnapshot.fitnessNutritionSummaries,
     // Full pull replaces this source-owned collection; local legacy archives stay untouched.
     fitnessWeightRecords: incomingSnapshot.fitnessWeightRecords ?? localSnapshot.fitnessWeightRecords,
+    fitnessSharedWorkoutRecords: incomingSnapshot.fitnessSharedWorkoutRecords ?? localSnapshot.fitnessSharedWorkoutRecords,
     notes: mergeEntities(localSnapshot.notes, incomingSnapshot.notes),
     tasks: mergeEntities(localSnapshot.tasks, incomingSnapshot.tasks),
     workoutRecords: mergeEntities(
@@ -126,6 +127,7 @@ export function mergeAuthoritativeSnapshot(
     fitnessNutritionSummaries: incomingSnapshot.fitnessNutritionSummaries ?? localSnapshot.fitnessNutritionSummaries,
     // Full pull replaces this source-owned collection; local legacy archives stay untouched.
     fitnessWeightRecords: incomingSnapshot.fitnessWeightRecords ?? localSnapshot.fitnessWeightRecords,
+    fitnessSharedWorkoutRecords: incomingSnapshot.fitnessSharedWorkoutRecords ?? localSnapshot.fitnessSharedWorkoutRecords,
     notes: mergeAuthoritativeEntities(
       localSnapshot.notes,
       incomingSnapshot.notes,

@@ -75,6 +75,7 @@ export function App() {
       notes: memo.notes,
       tasks: memo.tasks,
       workoutRecords: memo.workoutRecords,
+      fitnessSharedWorkoutRecords: memo.fitnessSharedWorkoutRecords,
       fitnessSummaryProjections: memo.fitnessSummaryProjections,
       fitnessNutritionSummaries: memo.fitnessNutritionSummaries,
       fitnessWeightRecords: memo.fitnessWeightRecords,
@@ -97,6 +98,7 @@ export function App() {
     [
       memo.activeDevices,
       memo.fitnessSummaryProjections,
+      memo.fitnessSharedWorkoutRecords,
       memo.fitnessNutritionSummaries,
       memo.fitnessWeightRecords,
       memo.mealRecords,
@@ -185,6 +187,7 @@ export function App() {
           ) : activeView === "fitness" ? (
             <FitnessPanel
               fitnessSummaryProjections={memo.fitnessSummaryProjections}
+              fitnessSharedWorkoutRecords={memo.fitnessSharedWorkoutRecords}
               nutritionSummaries={memo.fitnessNutritionSummaries}
               selectedDate={selectedDate}
             />

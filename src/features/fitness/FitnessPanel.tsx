@@ -4,6 +4,7 @@ import { BarChart3, Download, Dumbbell, Salad, Scale } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {
   FitnessSummaryProjectionV2,
+  LegacyWorkoutRecordV1,
 } from "../../types";
 import { BACKFILL_LABEL } from "../../lib/dataTrust/backfillMetadata";
 import { formatLocalDate, getCurrentMonthRange } from "./fitnessDate";
@@ -13,11 +14,12 @@ import {
 } from "./export/fitnessMarkdownExport";
 import { downloadMarkdown } from "./export/downloadMarkdown";
 import { FieldLabel, MetricPanel } from "./components/FitnessPanelPrimitives";
-import { formatFitnessProjectionLabels } from "../fitness-summary/fitnessSummary";
+import { formatSharedWorkoutLabels, getVisibleSharedWorkouts, sharedWorkoutDurationSeconds } from "../fitness-summary/sharedWorkoutSummaries";
 import { calculateFitnessStats, formatMetric } from "./stats/fitnessStats";
 
 interface FitnessPanelProps {
   fitnessSummaryProjections: FitnessSummaryProjectionV2[];
+  fitnessSharedWorkoutRecords: LegacyWorkoutRecordV1[] | undefined;
   nutritionSummaries: FitnessNutritionSummaryV1[] | undefined;
   selectedDate: string;
 
@@ -28,10 +30,12 @@ type ActionPanel = "stats" | "export" | null;
 /** Personal OS consumes the Fitness-owned Summary Projection v2 as read-only data. */
 export function FitnessPanel({
   fitnessSummaryProjections,
+  fitnessSharedWorkoutRecords,
   nutritionSummaries,
   selectedDate,
 
 }: FitnessPanelProps) {
+  const visibleWorkouts = useMemo(() => getVisibleSharedWorkouts({ fitnessSummaryProjections, fitnessSharedWorkoutRecords }), [fitnessSummaryProjections, fitnessSharedWorkoutRecords]);
   const currentMonthRange = getCurrentMonthRange();
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [rangeStartDate, setRangeStartDate] = useState(
@@ -41,7 +45,7 @@ export function FitnessPanel({
   const stats = useMemo(
     () =>
       calculateFitnessStats(
-        fitnessSummaryProjections,
+        visibleWorkouts,
         [],
         [],
 
@@ -49,7 +53,7 @@ export function FitnessPanel({
         rangeEndDate,
       ),
     [
-      fitnessSummaryProjections,
+      visibleWorkouts,
       nutritionSummaries,
       rangeEndDate,
       rangeStartDate,
@@ -59,7 +63,7 @@ export function FitnessPanel({
   const exportMarkdown = useMemo(
     () =>
       createFitnessMarkdownExport({
-        workoutRecords: fitnessSummaryProjections,
+        workoutRecords: visibleWorkouts,
         mealRecords: [],
         weightRecords: [],
 
@@ -67,7 +71,7 @@ export function FitnessPanel({
         endDate: rangeEndDate,
       }),
     [
-      fitnessSummaryProjections,
+      visibleWorkouts,
       nutritionSummaries,
       rangeEndDate,
       rangeStartDate,
@@ -78,8 +82,8 @@ export function FitnessPanel({
     rangeStartDate,
     rangeEndDate,
   );
-  const selectedDateProjections = fitnessSummaryProjections.filter(
-    (projection) => projection.date === selectedDate && projection.deletedAt === null && projection.contractVersion === 2 && projection.completionStatus === "completed",
+  const selectedDateProjections = visibleWorkouts.filter(
+    (record) => record.date === selectedDate,
   );
 
   const rangedNutrition = (nutritionSummaries ?? []).filter(
@@ -98,7 +102,7 @@ export function FitnessPanel({
             Fitness Summary
           </h2>
           <p className="truncate text-xs text-slate-500 dark:text-neutral-400">
-            Fitness 운동 v2 · 일별 식단 v1 읽기 전용 요약
+            Fitness 운동 요약 · 일별 식단 v1 읽기 전용
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -133,7 +137,7 @@ export function FitnessPanel({
         <div className="font-semibold">읽기 전용</div>
         <p className="mt-1 text-xs leading-5">
           운동·식사·체중 원본은 FitnessApp이 소유합니다. Personal OS에는
-          운동 세트·시간과 일별 식단 요약만 동기화됩니다.
+          완료 운동 요약과 일별 식단 요약을 읽습니다.
           원본 입력과 상세 수정은 FitnessApp에서 수행하세요.
         </p>
       </div>
@@ -243,11 +247,11 @@ export function FitnessPanel({
                 className="rounded-md border border-slate-200 px-3 py-2 dark:border-neutral-800"
               >
                 <div className="text-sm font-semibold text-slate-900 dark:text-neutral-100">
-                  {formatFitnessProjectionLabels(projection).join(" · ")}
+                  {formatSharedWorkoutLabels(projection).join(" · ")}
                 </div>
-                {projection.totalDurationSeconds !== null ? (
+                {sharedWorkoutDurationSeconds(projection) !== null ? (
                   <div className="mt-1 text-xs text-slate-500 dark:text-neutral-400">
-                    총 운동시간 {formatMetric(projection.totalDurationSeconds, 0)}초
+                    총 운동시간 {formatMetric(sharedWorkoutDurationSeconds(projection), 0)}초
                   </div>
                 ) : null}
               </div>

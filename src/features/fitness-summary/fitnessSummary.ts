@@ -5,11 +5,11 @@ import type {
   WeightRecord,
 } from "../../types";
 import { formatLocalDate, isWithinDateRange, parseDateInput } from "../fitness/fitnessDate";
-import { formatDurationSeconds } from "../fitness/fitnessService";
+import { formatSharedWorkoutLabels, getVisibleSharedWorkouts, isFitnessSummaryProjectionV2, type SharedWorkoutSummary } from "./sharedWorkoutSummaries";
 
 export interface FitnessSummary {
   todayHasWorkout: boolean;
-  recentWorkouts: FitnessSummaryProjectionV2[];
+  recentWorkouts: SharedWorkoutSummary[];
   weeklyWorkoutCount: number;
   weeklyStrengthSetSummaries: string[];
   latestWeightKg: number | null;
@@ -23,6 +23,7 @@ export interface FitnessSummary {
 
 export type FitnessConnectionStatus =
   | "no_fitness_records"
+  | "legacy_shared_workouts"
   | "summary_projection_v2";
 
 export interface FitnessConnectionSummary {
@@ -63,16 +64,6 @@ function isVisibleLegacyRecord(entity: {
   return entity.deletedAt === null && entity.scope !== "fitness" && entity.sourceApp !== "fitness";
 }
 
-function isVisibleProjection(
-  projection: FitnessSummaryProjectionV2,
-): boolean {
-  return (
-    projection.deletedAt === null &&
-    projection.completionStatus === "completed" &&
-    projection.contractVersion === 2
-  );
-}
-
 function sortByDateDescThenUpdatedDesc<T extends { date: string; updatedAt: string }>(
   records: T[],
 ): T[] {
@@ -103,14 +94,7 @@ function getLastSevenDayRange(today: string): { startDate: string; endDate: stri
 export function formatFitnessProjectionLabels(
   projection: FitnessSummaryProjectionV2,
 ): string[] {
-  const strengthLabels = STRENGTH_PARTS.filter(
-    ({ key }) => projection[key] > 0,
-  ).map(({ key, label }) => `${label} 운동 ${projection[key]}세트`);
-
-  if (projection.cardioDurationSeconds !== null) {
-    strengthLabels.push(`유산소 ${formatDurationSeconds(projection.cardioDurationSeconds)}`);
-  }
-  return strengthLabels.length ? strengthLabels : ["완료 운동 요약"];
+  return formatSharedWorkoutLabels(projection);
 }
 
 function getWeeklyStrengthSetSummaries(
@@ -141,13 +125,11 @@ function getWeeklyStrengthSetSummaries(
 }
 
 function getConnectionSummary(
-  snapshot: LocalDataSnapshot,
-  visibleProjections: FitnessSummaryProjectionV2[],
+  visibleWorkouts: SharedWorkoutSummary[],
 ): FitnessConnectionSummary {
-  // Source records are never read to infer Fitness progress.
   const hiddenInProgressFitnessRecords = 0;
 
-  if (visibleProjections.length === 0) {
+  if (visibleWorkouts.length === 0) {
     return {
       status: "no_fitness_records",
       linkedCount: 0,
@@ -157,13 +139,24 @@ function getConnectionSummary(
     };
   }
 
+  const v2Count = visibleWorkouts.filter(isFitnessSummaryProjectionV2).length;
+  if (v2Count === 0) {
+    return {
+      status: "legacy_shared_workouts",
+      linkedCount: visibleWorkouts.length,
+      quickRecordOnlyCount: 0,
+      possibleMismatchCount: 0,
+      message: "Fitness가 공유한 기존 완료 운동의 범주만 표시합니다. 세트 수는 v2 요약이 수신되면 표시됩니다.",
+    };
+  }
+
   return {
     status: "summary_projection_v2",
-    linkedCount: visibleProjections.length,
+    linkedCount: visibleWorkouts.length,
     quickRecordOnlyCount: 0,
     possibleMismatchCount: hiddenInProgressFitnessRecords,
     message:
-      "FitnessApp가 생성한 Summary Projection v2만 표시합니다. 원본 운동과 세트 상세는 FitnessApp에 남습니다.",
+      "FitnessApp의 v2 요약을 우선 표시하며, 아직 v2가 없는 기존 공유 운동은 범주만 표시합니다.",
   };
 }
 
@@ -171,8 +164,8 @@ export function getFitnessSummary(
   snapshot: LocalDataSnapshot,
   today = formatLocalDate(),
 ): FitnessSummary {
-  const visibleProjections = sortByDateDescThenUpdatedDesc(
-    snapshot.fitnessSummaryProjections.filter(isVisibleProjection),
+  const visibleWorkouts = sortByDateDescThenUpdatedDesc(
+    getVisibleSharedWorkouts(snapshot),
   );
   const visibleWeights = sortByDateDescThenUpdatedDesc(
     (snapshot.fitnessWeightRecords ?? snapshot.weightRecords.filter(isVisibleLegacyRecord))
@@ -181,17 +174,19 @@ export function getFitnessSummary(
   const nutritionSummaries = (snapshot.fitnessNutritionSummaries ?? []).filter((summary) => summary.date <= today).sort((first, second) => second.date.localeCompare(first.date));
   const latestNutritionSummary = nutritionSummaries[0] ?? null;
   const weekRange = getLastSevenDayRange(today);
-  const weeklyWorkouts = visibleProjections.filter((record) =>
+  const weeklyWorkouts = visibleWorkouts.filter((record) =>
     isWithinDateRange(record.date, weekRange.startDate, weekRange.endDate),
   );
   const latestWeight = visibleWeights[0] ?? null;
   const previousWeight = visibleWeights[1] ?? null;
 
   return {
-    todayHasWorkout: visibleProjections.some((record) => record.date === today),
-    recentWorkouts: visibleProjections.slice(0, 3),
+    todayHasWorkout: visibleWorkouts.some((record) => record.date === today),
+    recentWorkouts: visibleWorkouts.slice(0, 3),
     weeklyWorkoutCount: weeklyWorkouts.length,
-    weeklyStrengthSetSummaries: getWeeklyStrengthSetSummaries(weeklyWorkouts),
+    weeklyStrengthSetSummaries: getWeeklyStrengthSetSummaries(
+      weeklyWorkouts.filter(isFitnessSummaryProjectionV2),
+    ),
     latestWeightKg: latestWeight?.weightKg ?? null,
     previousWeightKg: previousWeight?.weightKg ?? null,
     weightDeltaKg:
@@ -201,6 +196,6 @@ export function getFitnessSummary(
     latestMeal: null,
     latestNutritionSummary,
     todayHasMeal: nutritionSummaries.some((record) => record.date === today),
-    connection: getConnectionSummary(snapshot, visibleProjections),
+    connection: getConnectionSummary(visibleWorkouts),
   };
 }

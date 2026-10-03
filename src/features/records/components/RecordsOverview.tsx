@@ -15,9 +15,9 @@ import {
   hasBackfillMetadata,
 } from "../../../lib/dataTrust/backfillMetadata";
 import {
-  formatFitnessProjectionLabels,
   getFitnessSummary,
 } from "../../fitness-summary/fitnessSummary";
+import { formatSharedWorkoutLabels } from "../../fitness-summary/sharedWorkoutSummaries";
 import { formatKoreanDate } from "../../fitness/fitnessDate";
 import { formatMetric } from "../../fitness/stats/fitnessStats";
 import {
@@ -354,7 +354,7 @@ export function RecordsOverview({
             {summarizeItems(
               fitnessSummary.recentWorkouts.map(
                 (record) =>
-                  `${record.date} ${formatFitnessProjectionLabels(record).join(" · ")}`,
+                  `${record.date} ${formatSharedWorkoutLabels(record).join(" · ")}`,
               ),
               "No recent workout sessions.",
             )}

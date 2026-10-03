@@ -7,6 +7,7 @@ import type {
   WeightRecord,
 } from "../../types";
 import { getFitnessSummary } from "./fitnessSummary";
+import { formatSharedWorkoutLabels } from "./sharedWorkoutSummaries";
 import type { FitnessNutritionSummaryV1 } from "./fitnessNutritionContract";
 
 const auditFields = {
@@ -166,6 +167,48 @@ describe("getFitnessSummary", () => {
 
     expect(summary.todayHasWorkout).toBe(false);
     expect(summary.recentWorkouts).toEqual([]);
+  });
+
+  it("shows a completed shared legacy category without inventing set counts", () => {
+    const shared = {
+      ...legacyWorkout,
+      id: "legacy-legs",
+      category: "하체",
+      scope: "both" as const,
+      metadata: { status: "completed" },
+    };
+    const summary = getFitnessSummary(snapshot({ fitnessSharedWorkoutRecords: [shared] }), "2026-07-08");
+
+    expect(summary.todayHasWorkout).toBe(true);
+    expect(summary.weeklyWorkoutCount).toBe(1);
+    expect(summary.weeklyStrengthSetSummaries).toEqual([]);
+    expect(summary.recentWorkouts).toEqual([shared]);
+    expect(formatSharedWorkoutLabels(summary.recentWorkouts[0])).toEqual(["하체 운동"]);
+    expect(summary.connection.status).toBe("legacy_shared_workouts");
+  });
+
+  it("prefers v2 for the same session and honors its tombstone", () => {
+    const shared = {
+      ...legacyWorkout,
+      id: projection.sourceFitnessSessionId,
+      category: "하체",
+      scope: "both" as const,
+      metadata: { status: "completed" },
+    };
+    const active = getFitnessSummary(
+      snapshot({ fitnessSharedWorkoutRecords: [shared], fitnessSummaryProjections: [projection] }),
+      "2026-07-08",
+    );
+    const deleted = getFitnessSummary(
+      snapshot({ fitnessSharedWorkoutRecords: [shared], fitnessSummaryProjections: [
+        { ...projection, deletedAt: "2026-07-09T00:00:00.000Z" },
+      ] }),
+      "2026-07-08",
+    );
+
+    expect(active.weeklyWorkoutCount).toBe(1);
+    expect(active.recentWorkouts).toEqual([projection]);
+    expect(deleted.recentWorkouts).toEqual([]);
   });
 
   it("reports no projection when the v2 read model is empty", () => {

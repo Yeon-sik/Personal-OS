@@ -31,6 +31,7 @@ import {
 import type {
   AuthState,
   FinanceDailySummary,
+  FitnessReadModelDiagnostics,
   RealtimeOptions,
   RealtimeSubscription,
   SyncClient,
@@ -69,6 +70,7 @@ function createConfiguredStatus(
   detail: string,
   lastSyncedAt: string | null,
   isOnline: boolean,
+  fitnessReadModels?: FitnessReadModelDiagnostics,
 ): SyncStatus {
   const labels: Record<SyncStatus["mode"], string> = {
     offline: "offline",
@@ -85,6 +87,7 @@ function createConfiguredStatus(
     isOnline,
     lastSyncedAt,
     isConfigured: true,
+    ...(fitnessReadModels ? { fitnessReadModels } : {}),
   };
 }
 
@@ -101,10 +104,44 @@ function createLocalOnlyStatus(isOnline: boolean): SyncStatus {
 
 function toErrorMessage(caughtError: unknown): string {
   if (caughtError instanceof Error) {
-    return caughtError.message;
+    const fields = caughtError as Error & {
+      code?: unknown;
+      details?: unknown;
+      hint?: unknown;
+      status?: unknown;
+    };
+    const code = typeof fields.code === "string" ? ` (${fields.code})` : "";
+    const status = typeof fields.status === "number" ? ` HTTP ${fields.status}` : "";
+    return [fields.message + code + status, fields.details, fields.hint]
+      .filter((value): value is string => typeof value === "string" && value.length > 0)
+      .join(" · ");
   }
 
-  return "Supabase 동기화 중 오류가 발생했습니다.";
+  if (caughtError && typeof caughtError === "object") {
+    const fields = caughtError as Record<string, unknown>;
+    return [fields.message, fields.code, fields.details, fields.hint]
+      .filter((value): value is string => typeof value === "string" && value.length > 0)
+      .join(" · ") || "Supabase 동기화 중 오류가 발생했습니다.";
+  }
+
+  return typeof caughtError === "string" && caughtError
+    ? caughtError
+    : "Supabase 동기화 중 오류가 발생했습니다.";
+}
+
+function getFitnessPartialDetail(
+  detail: string,
+  diagnostics?: FitnessReadModelDiagnostics,
+): string {
+  if (!diagnostics) {
+    return detail;
+  }
+  const failures = Object.entries(diagnostics)
+    .filter(([, status]) => status.state === "error")
+    .map(([source, status]) => `${source}: ${status.detail}`);
+  return failures.length > 0
+    ? `${detail} Fitness read model 부분 실패: ${failures.join(" | ")}`
+    : detail;
 }
 
 function createDefaultSupabaseClient(
@@ -135,6 +172,7 @@ export class SupabaseSyncClient implements SyncClient {
   private readonly getOnlineState: () => boolean;
   private readonly now: () => Date;
   private authenticatedUserId: string | null = null;
+  private fitnessReadModels?: FitnessReadModelDiagnostics;
   private status: SyncStatus;
 
   constructor({
@@ -189,6 +227,7 @@ export class SupabaseSyncClient implements SyncClient {
       detail,
       lastSyncedAt,
       this.getOnlineState(),
+      this.fitnessReadModels,
     );
   }
 
@@ -377,13 +416,18 @@ export class SupabaseSyncClient implements SyncClient {
         localSnapshot,
         context.userId,
       );
+      this.fitnessReadModels = transport.fitnessReadModels;
       this.status = this.toConfiguredStatus(
         "synced",
-        "Supabase에서 최신 데이터를 가져왔습니다.",
+        getFitnessPartialDetail(
+          "Supabase에서 최신 데이터를 가져왔습니다.",
+          this.fitnessReadModels,
+        ),
         this.nowIso(),
       );
       return mergedSnapshot;
     } catch (caughtError) {
+      this.fitnessReadModels = transport.fitnessReadModels ?? this.fitnessReadModels;
       this.status = this.toConfiguredStatus(
         "error",
         toErrorMessage(caughtError),
@@ -442,9 +486,13 @@ export class SupabaseSyncClient implements SyncClient {
         localSnapshot,
         context.userId,
       );
+      this.fitnessReadModels = transport.fitnessReadModels;
       this.status = this.toConfiguredStatus(
         "synced",
-        "Supabase에 저장하고 서버 확정값을 반영했습니다.",
+        getFitnessPartialDetail(
+          "Supabase에 저장하고 서버 확정값을 반영했습니다.",
+          this.fitnessReadModels,
+        ),
         this.nowIso(),
       );
 
@@ -459,6 +507,7 @@ export class SupabaseSyncClient implements SyncClient {
         },
       };
     } catch (caughtError) {
+      this.fitnessReadModels = transport.fitnessReadModels ?? this.fitnessReadModels;
       this.status = this.toConfiguredStatus(
         "error",
         toErrorMessage(caughtError),

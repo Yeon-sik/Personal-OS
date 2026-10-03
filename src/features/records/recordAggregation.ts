@@ -1,6 +1,5 @@
 import type {
   LocalDataSnapshot,
-  FitnessSummaryProjectionV2,
   MealRecord,
   Note,
   Task,
@@ -11,6 +10,7 @@ import {
   hasBackfillMetadata,
 } from "../../lib/dataTrust/backfillMetadata";
 import { formatLocalDate, isWithinDateRange, parseDateInput } from "../fitness/fitnessDate";
+import { getVisibleSharedWorkouts, type SharedWorkoutSummary } from "../fitness-summary/sharedWorkoutSummaries";
 
 export type LocalDateString = string;
 
@@ -40,7 +40,7 @@ export type CalendarMarkers = Record<LocalDateString, CalendarMarkerSet>;
 export interface DateRecords {
   notes: Note[];
   tasks: Task[];
-  workoutRecords: FitnessSummaryProjectionV2[];
+  workoutRecords: SharedWorkoutSummary[];
   mealRecords: MealRecord[];
   weightRecords: WeightRecord[];
 }
@@ -93,15 +93,6 @@ function isVisibleOsMeal(entity: MealRecord): boolean {
 
 function getWeightSource(snapshot: LocalDataSnapshot): WeightRecord[] {
   return snapshot.fitnessWeightRecords ?? snapshot.weightRecords.filter(isVisibleInOs);
-}
-
-function isVisibleFitnessProjection(
-  projection: FitnessSummaryProjectionV2,
-): boolean {
-  return (
-    projection.deletedAt === null &&
-    projection.completionStatus === "completed"
-  );
 }
 
 function toLocalDateFromTimestamp(value: string): LocalDateString | null {
@@ -273,8 +264,7 @@ export function getRecordsForDate(
       .filter((task) => isTaskVisibleOnDate(task, date))
       .sort(sortTasksBySchedule),
     workoutRecords: sortByDateThenUpdatedAt(
-      snapshot.fitnessSummaryProjections
-        .filter(isVisibleFitnessProjection)
+      getVisibleSharedWorkouts(snapshot)
         .filter((record) => record.date === date),
     ),
     mealRecords: sortByDateThenUpdatedAt(
@@ -300,8 +290,7 @@ export function getDashboardStats(
   const rangedTasks = rangedVisibleTasks.filter(
     (task) => !hasBackfillMetadata(task),
   );
-  const rangedWorkouts = snapshot.fitnessSummaryProjections
-    .filter(isVisibleFitnessProjection)
+  const rangedWorkouts = getVisibleSharedWorkouts(snapshot)
     .filter((record) => isWithinDateRange(record.date, range.startDate, range.endDate));
   const rangedMeals = snapshot.mealRecords
     .filter(isVisibleOsMeal)
@@ -406,9 +395,7 @@ export function getCalendarMarkers(
       marker.tasks.completedPlannedCount === marker.tasks.plannedCount;
   }
 
-  for (const record of snapshot.fitnessSummaryProjections.filter(
-    isVisibleFitnessProjection,
-  )) {
+  for (const record of getVisibleSharedWorkouts(snapshot)) {
     if (isWithinDateRange(record.date, range.startDate, range.endDate)) {
       ensureMarker(markers, record.date).workouts = true;
     }

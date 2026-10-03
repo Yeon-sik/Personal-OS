@@ -13,6 +13,7 @@ export function createEmptySnapshot(): LocalDataSnapshot {
     notes: [],
     tasks: [],
     workoutRecords: [],
+    fitnessSharedWorkoutRecords: [],
     fitnessSummaryProjections: [],
     fitnessNutritionSummaries: [],
     fitnessWeightRecords: [],

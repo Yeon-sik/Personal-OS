@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { LocalDataSnapshot } from "../../types";
 import { LocalStorageAdapter } from "./localStorageAdapter";
 import { createEmptySnapshot } from "./storageAdapter";
+import { makeWorkoutRecord } from "../sync/supabase/testFixtures";
 
 const STORAGE_KEY = "localsyncmemo:snapshot:v1";
 
@@ -141,6 +142,33 @@ describe("LocalStorageAdapter", () => {
     expect(snapshot.mealRecords[0]).toMatchObject({ id: "meal-legacy", menu: "archived meal", sourceApp: "fitness" });
     expect(snapshot.weightRecords[0]).toMatchObject({ id: "weight-legacy", weightKg: 72.4, sourceApp: "fitness" });
     expect(snapshot.fitnessWeightRecords).toEqual([]);
+  });
+
+  it("persists the remote Fitness read model separately from the local workout archive", async () => {
+    const archive = makeWorkoutRecord({ id: "archive", sourceApp: "os" });
+    const shared = makeWorkoutRecord({
+      id: "remote-legs",
+      sourceApp: "fitness",
+      scope: "both",
+      category: "하체",
+      metadata: { status: "completed" },
+    });
+    const adapter = new LocalStorageAdapter();
+    await adapter.save({
+      ...createEmptySnapshot(),
+      workoutRecords: [archive],
+      fitnessSharedWorkoutRecords: [shared],
+    });
+
+    const loaded = await adapter.load();
+    expect(loaded.workoutRecords).toMatchObject([{ id: "archive" }]);
+    expect(loaded.fitnessSharedWorkoutRecords).toMatchObject([{
+      id: "remote-legs",
+      category: "하체",
+      sourceApp: "fitness",
+      scope: "both",
+      metadata: { status: "completed" },
+    }]);
   });
 
   it("keeps URL-only Project rows readable and adds nullable GitHub identity fields", async () => {

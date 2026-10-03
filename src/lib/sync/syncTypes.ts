@@ -10,7 +10,21 @@ export interface SyncStatus {
   isOnline: boolean;
   lastSyncedAt: string | null;
   isConfigured: boolean;
+  fitnessReadModels?: FitnessReadModelDiagnostics;
 }
+
+export type FitnessReadModelName = "workout" | "nutrition" | "weight";
+export type FitnessReadModelState = "connected" | "empty" | "error";
+
+export interface FitnessReadModelStatus {
+  state: FitnessReadModelState;
+  detail: string;
+}
+
+export type FitnessReadModelDiagnostics = Record<
+  FitnessReadModelName,
+  FitnessReadModelStatus
+>;
 
 export interface SyncResult {
   status: SyncStatus;

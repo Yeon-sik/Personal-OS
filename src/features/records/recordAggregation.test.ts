@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { makeWorkoutRecord } from "../../lib/sync/supabase/testFixtures";
 import type {
   FitnessSummaryProjectionV2,
   LocalDataSnapshot,
@@ -167,6 +168,38 @@ describe("recordAggregation", () => {
       "fitness-shared",
     ]);
     expect(markers["2026-06-09"]?.workouts).toBe(true);
+  });
+
+  it("marks and lists only completed shared Fitness v1 workouts", () => {
+    const shared = makeWorkoutRecord({
+      id: "legacy-legs",
+      date: "2026-06-09",
+      sourceApp: "fitness",
+      scope: "both",
+      category: "하체",
+      metadata: { status: "completed" },
+    });
+    const inProgress = makeWorkoutRecord({
+      ...shared,
+      id: "in-progress",
+      scope: "fitness",
+      metadata: { status: "in_progress" },
+    });
+    const removed = makeWorkoutRecord({
+      ...shared,
+      id: "removed",
+      deletedAt: "2026-06-10T00:00:00.000Z",
+    });
+    const legacySnapshot = {
+      ...snapshot,
+      fitnessSharedWorkoutRecords: [shared, inProgress, removed],
+      fitnessSummaryProjections: [],
+    };
+
+    expect(getRecordsForDate(legacySnapshot, "2026-06-09").workoutRecords)
+      .toEqual([shared]);
+    expect(getCalendarMarkers(legacySnapshot, "2026-06-09")["2026-06-09"]?.workouts)
+      .toBe(true);
   });
 
   it("excludes tombstones from dashboard stats", () => {

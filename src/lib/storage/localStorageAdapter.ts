@@ -609,6 +609,10 @@ function normalizeSnapshot(value: unknown): LocalDataSnapshot {
     value.workoutRecords,
     normalizeWorkoutRecord,
   );
+  const fitnessSharedWorkoutRecords = normalizeArray(
+    value.fitnessSharedWorkoutRecords,
+    normalizeWorkoutRecord,
+  );
   const fitnessSummaryProjections = normalizeArray(
     value.fitnessSummaryProjections,
     normalizeFitnessSummaryProjection,
@@ -660,6 +664,7 @@ function normalizeSnapshot(value: unknown): LocalDataSnapshot {
     notes,
     tasks,
     workoutRecords,
+    fitnessSharedWorkoutRecords,
     fitnessSummaryProjections,
     fitnessNutritionSummaries: Array.isArray(value.fitnessNutritionSummaries)
       ? normalizeArray(value.fitnessNutritionSummaries, (row) => {

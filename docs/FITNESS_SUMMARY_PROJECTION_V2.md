@@ -5,8 +5,10 @@ frozen and readable for legacy compatibility.
 
 FitnessApp owns the original workout session, exercise master references, meal
 and nutrition data, weight/body-composition data, and all per-set detail.
-Personal OS reads only `public.fitness_summary_projections_v2` for shared
-workout summaries.
+Personal OS prefers `public.fitness_summary_projections_v2` for shared
+workout summaries. Until a v2 projection exists for a completed shared session,
+it may display only the category already published in Fitness-owned v1
+`workout_records`. It does not infer set counts from v1 rows.
 
 The write boundary is the Fitness-owned
 `upsert_fitness_summary_projection_v2(jsonb)` RPC. Personal OS has `SELECT`
