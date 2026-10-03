@@ -4,6 +4,7 @@ import type {
   FitnessSummaryProjectionV2,
   LocalDataSnapshot,
   MealRecord,
+  ProjectHistory,
   Task,
   WeightRecord,
 } from "../../types";
@@ -158,6 +159,28 @@ const snapshot: LocalDataSnapshot = {
   knowledgeDocuments: [],
 };
 
+function makeProjectHistory(
+  id: string,
+  occurredAt: string,
+  deletedAt: string | null = null,
+): ProjectHistory {
+  return {
+    id,
+    projectId: "project-a",
+    type: "NOTE",
+    summary: id,
+    occurredAt,
+    githubRef: null,
+    createdAt: occurredAt,
+    updatedAt: occurredAt,
+    deletedAt,
+    deviceId: "device-a",
+    isBackfilled: false,
+    backfilledAt: null,
+    backfillReason: null,
+  };
+}
+
 describe("recordAggregation", () => {
   it("excludes tombstones from selected date records", () => {
     const records = getRecordsForDate(snapshot, "2026-06-09");
@@ -180,7 +203,49 @@ describe("recordAggregation", () => {
 
     expect(records.fitnessNutritionSummary).toEqual(fitnessNutritionSummary);
     expect(records.weightRecords).toEqual([fitnessWeight]);
-    expect(markers["2026-06-09"]).toMatchObject({ meals: true, weights: true });
+    expect(markers["2026-06-09"]).toMatchObject({
+      progressStack: {
+        project: 0,
+        training: 1,
+        learning: 0,
+        routine: 0,
+        reservedOne: 0,
+        reservedTwo: 0,
+      },
+    });
+    expect(markers["2026-06-09"]).not.toHaveProperty("meals");
+    expect(markers["2026-06-09"]).not.toHaveProperty("weights");
+  });
+
+  it("counts project history and completed Fitness workouts on their occurrence dates", () => {
+    const secondWorkout: FitnessSummaryProjectionV2 = {
+      ...liveWorkout,
+      id: "workout-live-2",
+      sourceFitnessSessionId: "workout-live-2",
+    };
+    const markers = getCalendarMarkers(
+      {
+        ...snapshot,
+        projectHistory: [
+          makeProjectHistory("history-1", "2026-06-09T12:00:00.000Z"),
+          makeProjectHistory("history-2", "2026-06-09T13:00:00.000Z"),
+          makeProjectHistory("history-next-day", "2026-06-10T12:00:00.000Z"),
+          makeProjectHistory("history-deleted", "2026-06-09T14:00:00.000Z", "2026-06-10T00:00:00.000Z"),
+        ],
+        fitnessSummaryProjections: [liveWorkout, secondWorkout, deletedWorkout],
+      },
+      "2026-06-09",
+    );
+
+    expect(markers["2026-06-09"]?.progressStack).toMatchObject({
+      project: 2,
+      training: 2,
+      learning: 0,
+      routine: 0,
+      reservedOne: 0,
+      reservedTwo: 0,
+    });
+    expect(markers["2026-06-10"]?.progressStack.project).toBe(1);
   });
 
   it("shows completed Summary Projection v2 rows", () => {
@@ -201,7 +266,7 @@ describe("recordAggregation", () => {
     expect(records.workoutRecords.map((record) => record.id)).toEqual([
       "fitness-shared",
     ]);
-    expect(markers["2026-06-09"]?.workouts).toBe(true);
+    expect(markers["2026-06-09"]?.progressStack.training).toBe(1);
   });
 
   it("marks and lists only completed shared Fitness v1 workouts", () => {
@@ -232,8 +297,8 @@ describe("recordAggregation", () => {
 
     expect(getRecordsForDate(legacySnapshot, "2026-06-09").workoutRecords)
       .toEqual([shared]);
-    expect(getCalendarMarkers(legacySnapshot, "2026-06-09")["2026-06-09"]?.workouts)
-      .toBe(true);
+    expect(getCalendarMarkers(legacySnapshot, "2026-06-09")["2026-06-09"]?.progressStack.training)
+      .toBe(1);
   });
 
   it("excludes tombstones from dashboard stats", () => {
@@ -364,7 +429,7 @@ describe("recordAggregation", () => {
     expect(markers["2026-06-09"]).toBeUndefined();
   });
 
-  it("shows scheduled tasks across dates before the due date", () => {
+  it("marks tasks only on their planned and due dates", () => {
     const scheduledTask: Task = {
       ...directTask,
       id: "task-scheduled",
@@ -372,6 +437,7 @@ describe("recordAggregation", () => {
       isDone: false,
       createdAt: "2026-06-07T00:00:00.000Z",
       updatedAt: "2026-06-07T00:00:00.000Z",
+      plannedDate: "2026-06-08",
       dueDate: "2026-06-09",
     };
     const markers = getCalendarMarkers(
@@ -382,11 +448,10 @@ describe("recordAggregation", () => {
       "2026-06-09",
     );
 
-    expect(markers["2026-06-07"]?.tasks.activeCount).toBe(1);
-    expect(markers["2026-06-07"]?.tasks.dueCount).toBe(0);
-    expect(markers["2026-06-08"]?.tasks.activeCount).toBe(1);
+    expect(markers["2026-06-07"]).toBeUndefined();
+    expect(markers["2026-06-08"]?.tasks.plannedCount).toBe(1);
     expect(markers["2026-06-08"]?.tasks.dueCount).toBe(0);
-    expect(markers["2026-06-09"]?.tasks.activeCount).toBe(1);
+    expect(markers["2026-06-09"]?.tasks.plannedCount).toBe(0);
     expect(markers["2026-06-09"]?.tasks.dueCount).toBe(1);
   });
 
@@ -412,13 +477,14 @@ describe("recordAggregation", () => {
     expect(records.tasks[0].id).toBe("task-scheduled");
   });
 
-  it("counts multiple active tasks as multiple calendar dots before the due date", () => {
+  it("counts planned tasks on planned dates and deadlines only on due dates", () => {
     const firstTask: Task = {
       ...directTask,
       id: "task-scheduled-1",
       isDone: false,
       createdAt: "2026-06-07T00:00:00.000Z",
       updatedAt: "2026-06-07T00:00:00.000Z",
+      plannedDate: "2026-06-08",
       dueDate: "2026-06-09",
     };
     const secondTask: Task = {
@@ -427,6 +493,7 @@ describe("recordAggregation", () => {
       isDone: false,
       createdAt: "2026-06-08T00:00:00.000Z",
       updatedAt: "2026-06-08T00:00:00.000Z",
+      plannedDate: "2026-06-08",
       dueDate: "2026-06-10",
     };
     const markers = getCalendarMarkers(
@@ -437,10 +504,12 @@ describe("recordAggregation", () => {
       "2026-06-09",
     );
 
-    expect(markers["2026-06-08"]?.tasks.activeCount).toBe(2);
+    expect(markers["2026-06-07"]).toBeUndefined();
+    expect(markers["2026-06-08"]?.tasks.plannedCount).toBe(2);
+    expect(markers["2026-06-08"]?.tasks.completedPlannedCount).toBe(0);
     expect(markers["2026-06-08"]?.tasks.dueCount).toBe(0);
-    expect(markers["2026-06-09"]?.tasks.activeCount).toBe(2);
     expect(markers["2026-06-09"]?.tasks.dueCount).toBe(1);
+    expect(markers["2026-06-10"]?.tasks.dueCount).toBe(1);
   });
 
   it("uses planned dates for productivity and marks fully completed planned days", () => {
@@ -486,7 +555,15 @@ describe("recordAggregation", () => {
       "2026-06-11",
       "2026-06-12",
     ]);
-    expect(markers["2026-06-11"]?.tasks.allPlannedDone).toBe(true);
-    expect(markers["2026-06-12"]?.tasks.allPlannedDone).toBe(false);
+    expect(markers["2026-06-11"]?.tasks).toMatchObject({
+      plannedCount: 1,
+      completedPlannedCount: 1,
+      dueCount: 2,
+    });
+    expect(markers["2026-06-12"]?.tasks).toMatchObject({
+      plannedCount: 1,
+      completedPlannedCount: 0,
+      dueCount: 0,
+    });
   });
 });

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LocalDataSnapshot, Task } from "../../types";
 import type { FitnessNutritionSummaryV1 } from "../fitness-summary/fitnessNutritionContract";
 import type { SyncStatus } from "../../lib/sync/syncTypes";
+import type { CalendarMarkers } from "./recordAggregation";
 import { QuickActionOverlay } from "../command-center/quickActions/QuickActionOverlay";
 import { RecordCalendar } from "./RecordCalendar";
 import { RecordsPanel } from "./RecordsPanel";
@@ -128,12 +129,18 @@ afterEach(() => {
 });
 
 describe("RecordsPanel calendar-first record hub", () => {
-  it("keeps the existing stacked calendar first, date selection, and task completion", () => {
+  it("keeps the six-rail calendar, Plan markers, date selection, and task completion", () => {
     const { renderer, callbacks } = renderPanel();
     const section = renderer.root.findByType("section");
     expect(section.children[0]).toBe(renderer.root.findByType(RecordCalendar));
     const calendar = renderer.root.findByType(RecordCalendar);
-    expect(calendar.props.markerByDate[today].tasks.allPlannedDone).toBe(true);
+    expect(calendar.props.markerByDate[today].tasks).toMatchObject({
+      dueCount: 1,
+      plannedCount: 1,
+      completedPlannedCount: 1,
+    });
+    expect(textContent(calendar)).toContain("✓1/1");
+    expect(textContent(calendar)).toContain("!1");
 
     act(() => calendar.props.onSelectDate("2026-10-03"));
     expect(callbacks.onSelectDate).toHaveBeenCalledWith("2026-10-03");
@@ -143,6 +150,56 @@ describe("RecordsPanel calendar-first record hub", () => {
     });
     expect(callbacks.onToggleTask).toHaveBeenCalledWith(task.id);
     expect(callbacks.loadFinanceDailySummaries).not.toHaveBeenCalled();
+  });
+
+  it("renders Project and Training counts in the stack and notes outside it", () => {
+    const markerByDate: CalendarMarkers = {
+      [today]: {
+        notes: true,
+        tasks: {
+          dueCount: 0,
+          plannedCount: 0,
+          completedPlannedCount: 0,
+        },
+        progressStack: {
+          project: 2,
+          training: 3,
+          learning: 0,
+          routine: 0,
+          reservedOne: 0,
+          reservedTwo: 0,
+        },
+      },
+    };
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(
+        <RecordCalendar
+          markerByDate={markerByDate}
+          financeByDate={{}}
+          selectedDate={today}
+          visibleMonth={today}
+          onSelectDate={vi.fn()}
+          onVisibleMonthChange={vi.fn()}
+        />,
+      );
+    });
+    renderers.push(renderer);
+
+    const calendar = renderer.root.findByType(RecordCalendar);
+    const selectedCell = calendar.findAllByType("button").find((button) =>
+      String(button.props.className).includes("border-teal-600"),
+    );
+    expect(selectedCell).toBeDefined();
+
+    const stack = selectedCell?.findByProps({
+      className: "grid min-h-[42px] flex-1 w-full grid-rows-6 gap-0 overflow-hidden",
+    });
+    expect(stack?.children).toHaveLength(6);
+    expect(textContent(stack!)).toBe("x2x3");
+    expect(stack?.findByProps({ title: "프로젝트 2건" })).toBeDefined();
+    expect(stack?.findByProps({ title: "운동 3건" })).toBeDefined();
+    expect(selectedCell?.findByProps({ title: "메모 있음" })).toBeDefined();
   });
 
   it("opens the existing Quick Action with the selected day and write callbacks", () => {

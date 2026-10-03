@@ -22,18 +22,23 @@ export interface DateRange {
 
 export interface CalendarTaskMarker {
   dueCount: number;
-  activeCount: number;
   plannedCount: number;
   completedPlannedCount: number;
-  allPlannedDone: boolean;
+}
+
+export interface CalendarProgressStack {
+  project: number;
+  training: number;
+  learning: number;
+  routine: number;
+  reservedOne: number;
+  reservedTwo: number;
 }
 
 export interface CalendarMarkerSet {
   notes: boolean;
   tasks: CalendarTaskMarker;
-  workouts: boolean;
-  meals: boolean;
-  weights: boolean;
+  progressStack: CalendarProgressStack;
 }
 
 export type CalendarMarkers = Record<LocalDateString, CalendarMarkerSet>;
@@ -244,14 +249,17 @@ function emptyMarkerSet(): CalendarMarkerSet {
     notes: false,
     tasks: {
       dueCount: 0,
-      activeCount: 0,
       plannedCount: 0,
       completedPlannedCount: 0,
-      allPlannedDone: false,
     },
-    workouts: false,
-    meals: false,
-    weights: false,
+    progressStack: {
+      project: 0,
+      training: 0,
+      learning: 0,
+      routine: 0,
+      reservedOne: 0,
+      reservedTwo: 0,
+    },
   };
 }
 
@@ -385,6 +393,14 @@ export function getCalendarMarkers(
     }
   }
 
+  for (const history of snapshot.projectHistory.filter(isVisibleEntity)) {
+    const date = toLocalDateFromTimestamp(history.occurredAt);
+
+    if (isDateInRange(date, range)) {
+      ensureMarker(markers, date as LocalDateString).progressStack.project += 1;
+    }
+  }
+
   for (const task of snapshot.tasks.filter(isVisibleEntity)) {
     if (isDateInRange(task.plannedDate, range)) {
       const taskMarker = ensureMarker(markers, task.plannedDate as LocalDateString).tasks;
@@ -395,62 +411,14 @@ export function getCalendarMarkers(
       }
     }
 
-    const visibleRange = getTaskVisibleRange(task);
-
-    if (!visibleRange) {
-      continue;
+    if (isDateInRange(task.dueDate, range)) {
+      ensureMarker(markers, task.dueDate as LocalDateString).tasks.dueCount += 1;
     }
-
-    const startDate =
-      visibleRange.startDate.localeCompare(range.startDate) < 0
-        ? range.startDate
-        : visibleRange.startDate;
-    const endDate =
-      visibleRange.endDate.localeCompare(range.endDate) > 0
-        ? range.endDate
-        : visibleRange.endDate;
-
-    if (startDate.localeCompare(endDate) > 0) {
-      continue;
-    }
-
-    for (const date of getDateRangeDays({ startDate, endDate })) {
-      const taskMarker = ensureMarker(markers, date).tasks;
-      taskMarker.activeCount += 1;
-
-      if (task.dueDate === date) {
-        taskMarker.dueCount += 1;
-      }
-    }
-  }
-
-  for (const marker of Object.values(markers)) {
-    marker.tasks.allPlannedDone =
-      marker.tasks.plannedCount > 0 &&
-      marker.tasks.completedPlannedCount === marker.tasks.plannedCount;
   }
 
   for (const record of getVisibleSharedWorkouts(snapshot)) {
     if (isWithinDateRange(record.date, range.startDate, range.endDate)) {
-      ensureMarker(markers, record.date).workouts = true;
-    }
-  }
-
-  for (const record of snapshot.mealRecords.filter(isVisibleOsMeal)) {
-    if (isWithinDateRange(record.date, range.startDate, range.endDate)) {
-      ensureMarker(markers, record.date).meals = true;
-    }
-  }
-
-  for (const summary of snapshot.fitnessNutritionSummaries ?? []) {
-    if (isWithinDateRange(summary.date, range.startDate, range.endDate)) {
-      ensureMarker(markers, summary.date).meals = true;
-    }
-  }
-
-  for (const record of getWeightSource(snapshot).filter(isVisibleEntity)) {
-    if (isWithinDateRange(record.date, range.startDate, range.endDate)) {
-      ensureMarker(markers, record.date).weights = true;
+      ensureMarker(markers, record.date).progressStack.training += 1;
     }
   }
 

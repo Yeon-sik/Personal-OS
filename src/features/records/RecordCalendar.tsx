@@ -7,6 +7,7 @@ import {
 } from "../finance/financeCalendar";
 import type {
   CalendarMarkers,
+  CalendarProgressStack,
   CalendarTaskMarker,
 } from "./recordAggregation";
 
@@ -50,87 +51,108 @@ function getMonthTitle(monthDate: Date): string {
   }).format(monthDate);
 }
 
-const markerStyles: Array<{
-  key: "notes" | "workouts" | "meals" | "weights";
+const progressRails: Array<{
+  key: keyof CalendarProgressStack;
   className: string;
   label: string;
 }> = [
   {
-    key: "notes",
-    label: "메모",
-    className: "border-slate-400 bg-white dark:border-neutral-200 dark:bg-neutral-100",
+    key: "project",
+    label: "프로젝트",
+    className: "border-transparent bg-violet-700 text-white dark:bg-violet-600",
   },
   {
-    key: "workouts",
+    key: "training",
     label: "운동",
-    className: "border-transparent bg-red-500",
+    className: "border-transparent bg-red-700 text-white dark:bg-red-600",
   },
   {
-    key: "meals",
-    label: "식단",
-    className: "border-transparent bg-yellow-400",
+    key: "learning",
+    label: "학습 · 예약",
+    className: "",
   },
   {
-    key: "weights",
-    label: "체중",
-    className: "border-transparent bg-emerald-500",
+    key: "routine",
+    label: "루틴 · 예약",
+    className: "",
+  },
+  {
+    key: "reservedOne",
+    label: "예약 1",
+    className: "",
+  },
+  {
+    key: "reservedTwo",
+    label: "예약 2",
+    className: "",
   },
 ];
 
 const emptyTaskMarker: CalendarTaskMarker = {
   dueCount: 0,
-  activeCount: 0,
   plannedCount: 0,
   completedPlannedCount: 0,
-  allPlannedDone: false,
+};
+const emptyProgressStack: CalendarProgressStack = {
+  project: 0,
+  training: 0,
+  learning: 0,
+  routine: 0,
+  reservedOne: 0,
+  reservedTwo: 0,
 };
 
 const calendarCellSize = "h-[clamp(5.75rem,16vw,6.75rem)] min-w-0";
 const calendarCellBase =
-  `${calendarCellSize} flex flex-col justify-between gap-1 ` +
-  "rounded-md border-2 px-1 py-1 text-xs";
+  `${calendarCellSize} flex flex-col gap-0 rounded-md border-2 px-1 py-0.5 text-xs`;
 
-function renderTaskMarker(taskMarker: CalendarTaskMarker) {
-  if (taskMarker.dueCount > 0) {
-    return (
-      <span
-        title={`할 일 ${taskMarker.dueCount}개 마감`}
-        className="block h-full w-full rounded-sm border-2 border-transparent bg-sky-400"
-      />
-    );
-  }
-
-  if (taskMarker.activeCount > 0) {
-    return (
-      <span
-        title={`진행 중인 할 일 ${taskMarker.activeCount}개`}
-        className="flex h-full w-full min-w-0 items-center justify-center gap-1 rounded-sm border-2 border-slate-200 bg-transparent px-1 dark:border-neutral-700"
-      >
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
-        <span className="text-[10px] font-semibold leading-none text-sky-500 dark:text-sky-300">
-          x{taskMarker.activeCount}
-        </span>
-      </span>
-    );
-  }
-
-  return (
-    <span className="block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700" />
-  );
-}
-
-function renderPlannedDoneMarker(taskMarker: CalendarTaskMarker) {
-  if (!taskMarker.allPlannedDone) {
-    return (
-      <span className="block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700" />
-    );
-  }
+function renderPlanMarker(taskMarker: CalendarTaskMarker) {
+  const plannedCount = taskMarker.plannedCount > 0
+    ? `✓${taskMarker.completedPlannedCount}/${taskMarker.plannedCount}`
+    : "";
+  const dueCount = taskMarker.dueCount > 0 ? `!${taskMarker.dueCount}` : "";
+  const planTitle = [
+    plannedCount ? `계획 ${taskMarker.completedPlannedCount}/${taskMarker.plannedCount} 완료` : "",
+    dueCount ? `마감 ${taskMarker.dueCount}개` : "",
+  ].filter(Boolean).join(" · ");
 
   return (
     <span
-      title={`오늘 할 일 ${taskMarker.completedPlannedCount}/${taskMarker.plannedCount} 완료`}
-      className="block h-full w-full rounded-sm border-2 border-transparent bg-[#FF00FF]"
-    />
+      title={planTitle || "Plan"}
+      className="flex h-2 min-w-0 items-center gap-0.5 overflow-hidden text-[7px] font-semibold leading-none"
+    >
+      <span className="shrink-0 text-slate-500 dark:text-neutral-400">Plan</span>
+      <span className="truncate text-teal-700 dark:text-teal-300">
+        {plannedCount || "\u00a0"}
+      </span>
+      <span className="shrink-0 text-amber-700 dark:text-amber-300">
+        {dueCount}
+      </span>
+    </span>
+  );
+}
+
+function renderProgressRail(
+  progressStack: CalendarProgressStack,
+  rail: (typeof progressRails)[number],
+) {
+  const count = progressStack[rail.key];
+  const isActive = count > 0;
+
+  return (
+    <span
+      key={rail.key}
+      title={isActive ? `${rail.label} ${count}건` : rail.label}
+      aria-label={isActive ? `${rail.label} ${count}건` : undefined}
+      aria-hidden={!isActive}
+      className={
+        isActive
+          ? `flex h-full min-h-[7px] min-w-0 items-center justify-center overflow-hidden rounded-sm border-2 px-0.5 text-[7px] font-semibold leading-none ${rail.className}`
+          : "block h-full min-h-[7px] w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700"
+      }
+    >
+      {isActive ? `x${count}` : ""}
+    </span>
   );
 }
 
@@ -214,6 +236,7 @@ export function RecordCalendar({
           const isSelected = date === selectedDate;
           const isToday = date === today;
           const taskMarker = markers?.tasks ?? emptyTaskMarker;
+          const progressStack = markers?.progressStack;
 
           return date ? (
             <button
@@ -228,16 +251,26 @@ export function RecordCalendar({
                   : `${calendarCellBase} border-slate-200 bg-white text-slate-800 transition hover:border-teal-300 hover:bg-teal-50 dark:border-neutral-800 dark:bg-black dark:text-neutral-200 dark:hover:border-teal-800 dark:hover:bg-teal-950/30`
               }
             >
-              <span
-                className={
-                  isToday
-                    ? "inline-flex h-5 min-w-5 items-center justify-center self-center rounded-full bg-slate-900 px-1 text-[11px] font-semibold text-white dark:bg-neutral-100 dark:text-black"
-                    : "inline-flex h-5 min-w-5 items-center justify-center self-center px-1 text-[11px] font-semibold"
-                }
-              >
-                {Number(date.slice(-2))}
+              <span className="relative flex h-4 w-full shrink-0 items-center justify-center">
+                <span
+                  className={
+                    isToday
+                      ? "inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-slate-900 px-1 text-[11px] font-semibold text-white dark:bg-neutral-100 dark:text-black"
+                      : "inline-flex h-4 min-w-4 items-center justify-center px-1 text-[11px] font-semibold"
+                  }
+                >
+                  {Number(date.slice(-2))}
+                </span>
+                {markers?.notes ? (
+                  <span
+                    title="메모 있음"
+                    aria-label="메모 있음"
+                    className="absolute right-1 h-1.5 w-1.5 rounded-full bg-slate-500 dark:bg-neutral-300"
+                  />
+                ) : null}
               </span>
-              <span className="min-h-6 w-full space-y-0.5 overflow-hidden text-[9px] font-semibold leading-[1.05]">
+              {renderPlanMarker(taskMarker)}
+              <span className="grid h-[18px] w-full shrink-0 grid-rows-2 overflow-hidden text-[9px] font-semibold leading-[9px]">
                 <span className="block truncate text-emerald-700 dark:text-emerald-300">
                   {finance?.incomeKrw
                     ? `+${formatCompactKrw(finance.incomeKrw)}`
@@ -249,45 +282,11 @@ export function RecordCalendar({
                     : "\u00a0"}
                 </span>
               </span>
-              <span className="grid min-h-0 flex-1 w-full grid-rows-6 gap-0.5 overflow-hidden">
-                <span
-                  title={markers?.weights ? "체중" : undefined}
-                  className={
-                    markers?.weights
-                      ? `block h-full w-full rounded-sm border-2 ${markerStyles[3].className}`
-                      : "block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700"
-                  }
-                  aria-hidden={!markers?.weights}
-                />
-                <span
-                  title={markers?.meals ? "식단" : undefined}
-                  className={
-                    markers?.meals
-                      ? `block h-full w-full rounded-sm border-2 ${markerStyles[2].className}`
-                      : "block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700"
-                  }
-                  aria-hidden={!markers?.meals}
-                />
-                <span
-                  title={markers?.workouts ? "운동" : undefined}
-                  className={
-                    markers?.workouts
-                      ? `block h-full w-full rounded-sm border-2 ${markerStyles[1].className}`
-                      : "block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700"
-                  }
-                  aria-hidden={!markers?.workouts}
-                />
-                {renderTaskMarker(taskMarker)}
-                {renderPlannedDoneMarker(taskMarker)}
-                <span
-                  title={markers?.notes ? "메모" : undefined}
-                  className={
-                    markers?.notes
-                      ? `block h-full w-full rounded-sm border-2 ${markerStyles[0].className}`
-                      : "block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700"
-                  }
-                  aria-hidden={!markers?.notes}
-                />
+              <span className="grid min-h-[42px] flex-1 w-full grid-rows-6 gap-0 overflow-hidden">
+                {progressRails.map((rail) => renderProgressRail(
+                  progressStack ?? emptyProgressStack,
+                  rail,
+                ))}
               </span>
             </button>
           ) : (
