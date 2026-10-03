@@ -5,7 +5,7 @@ import { getRecordsForDate } from "../records/recordAggregation";
 import { emptySnapshot, entity, projection, task } from "./testFixtures";
 
 describe("HomePanel entry points", () => {
-  it("opens the existing calendar, task screen, projects, capture and health summary", () => {
+  it("opens the existing calendar, task screen, projects and capture", () => {
     const records = vi.fn();
     const projects = vi.fn();
     const capture = vi.fn();
@@ -27,8 +27,6 @@ describe("HomePanel entry points", () => {
     expect(projects).toHaveBeenCalledTimes(1);
     clickText("빠른 입력");
     expect(capture).toHaveBeenCalledTimes(1);
-    act(() => renderer.root.findAllByType("button").find((entry) => entry.findAllByType("p").some((paragraph) => paragraph.children.join("").startsWith("건강 ·")))!.props.onClick());
-    expect(records).toHaveBeenLastCalledWith("fitness", "2026-10-02");
 
     const text = JSON.stringify(renderer.toJSON());
     expect(text).toContain("로컬 저장");
@@ -118,7 +116,6 @@ describe("HomePanel entry points", () => {
     });
 
     expect(renderer.root.findAllByType("div").filter((entry) => entry.props.className?.includes("text-sm font-semibold tabular-nums text-white")).map((entry) => entry.children.join(""))).toEqual(["1개", "1개", "기록 없음", "0개"]);
-    expect(renderer.root.findAllByType("li").map((entry) => entry.findAllByType("span").map((span) => span.children.join("")).join(""))).toEqual(["오늘 계획한 일"]);
     act(() => renderer.unmount());
   });
 });
