@@ -13,6 +13,7 @@ import {
   hasBackfillMetadata,
 } from "../../../lib/dataTrust/backfillMetadata";
 import { formatKoreanDate } from "../../fitness/fitnessDate";
+import { formatNutritionMetric } from "../../fitness-summary/FitnessNutritionCard";
 import { formatMetric } from "../../fitness/stats/fitnessStats";
 import {
   getDashboardStats,
@@ -20,6 +21,7 @@ import {
   getNutritionSeries,
   getProductivitySeries,
   getRecordsForDate,
+  getWeightRecordsForDisplay,
   getWeightSeries,
 } from "../recordAggregation";
 import { useChartInteraction } from "../hooks/useChartInteraction";
@@ -51,6 +53,7 @@ function summarizeItems(items: string[], emptyText: string): string {
 export function RecordsOverview({
   selectedDate,
   snapshot,
+  syncStatus,
 }: RecordsOverviewProps) {
   const selectedRange = useMemo(() => getMonthRange(selectedDate), [selectedDate]);
   const dashboardStats = useMemo(
@@ -62,12 +65,22 @@ export function RecordsOverview({
     [selectedRange, snapshot.tasks],
   );
   const nutritionSeries = useMemo(
-    () => getNutritionSeries(snapshot.mealRecords, selectedRange),
-    [selectedRange, snapshot.mealRecords],
+    () => getNutritionSeries(
+      snapshot.mealRecords,
+      selectedRange,
+      snapshot.fitnessNutritionSummaries ?? [],
+    ),
+    [selectedRange, snapshot.fitnessNutritionSummaries, snapshot.mealRecords],
   );
   const weightSeries = useMemo(
-    () => getWeightSeries(snapshot.weightRecords, selectedRange),
-    [selectedRange, snapshot.weightRecords],
+    () => getWeightSeries(
+      getWeightRecordsForDisplay(
+        snapshot.fitnessWeightRecords ?? snapshot.weightRecords,
+        syncStatus,
+      ),
+      selectedRange,
+    ),
+    [selectedRange, snapshot.fitnessWeightRecords, snapshot.weightRecords, syncStatus],
   );
   const productivityInteraction = useChartInteraction(productivitySeries.length);
   const nutritionInteraction = useChartInteraction(nutritionSeries.length);
@@ -139,13 +152,22 @@ export function RecordsOverview({
           ? "-"
           : `${formatMetric(activeNutritionPoint.averageProteinGrams)} g`}
       </p>
+      {nutritionDetailRecords?.fitnessNutritionSummary ? (
+        <p>
+          Fitness 식단 {nutritionDetailRecords.fitnessNutritionSummary.mealCount}회 · 합계{" "}
+          {formatNutritionMetric(nutritionDetailRecords.fitnessNutritionSummary.calories)} kcal · 단백질{" "}
+          {formatNutritionMetric(nutritionDetailRecords.fitnessNutritionSummary.proteinGrams)} g
+        </p>
+      ) : null}
       <p>
         {summarizeItems(
           (nutritionDetailRecords?.mealRecords ?? []).map(
             (record) =>
               `${record.menu} ${record.calories.toLocaleString("ko-KR")} kcal / ${formatMetric(record.proteinGrams)} g`,
           ),
-          "이 날 등록된 식사 기록이 없습니다.",
+          nutritionDetailRecords?.fitnessNutritionSummary
+            ? "개별 메뉴와 원본 식사 정보는 Fitness App에서 확인하세요."
+            : "이 날 등록된 식사 기록이 없습니다.",
         )}
       </p>
     </div>

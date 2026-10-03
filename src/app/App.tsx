@@ -233,6 +233,8 @@ export function App() {
                     fitnessSummaryProjections={memo.fitnessSummaryProjections}
                     fitnessSharedWorkoutRecords={memo.fitnessSharedWorkoutRecords}
                     nutritionSummaries={memo.fitnessNutritionSummaries}
+                    fitnessWeightRecords={memo.fitnessWeightRecords}
+                    syncStatus={memo.syncStatus}
                     selectedDate={selectedDate}
                   />
                 )}

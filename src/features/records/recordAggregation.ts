@@ -5,6 +5,7 @@ import type {
   Task,
   WeightRecord,
 } from "../../types";
+import type { FitnessNutritionSummaryV1 } from "../fitness-summary/fitnessNutritionContract";
 import {
   countBackfilledRecords,
   hasBackfillMetadata,
@@ -42,6 +43,7 @@ export interface DateRecords {
   tasks: Task[];
   workoutRecords: SharedWorkoutSummary[];
   mealRecords: MealRecord[];
+  fitnessNutritionSummary: FitnessNutritionSummaryV1 | null;
   weightRecords: WeightRecord[];
 }
 
@@ -165,6 +167,29 @@ function averagePositive(values: number[]): number | null {
   return average(values.filter((value) => value > 0));
 }
 
+function averagePositiveWithFitnessSummaries(
+  values: number[],
+  summaries: FitnessNutritionSummaryV1[],
+  metric: "calories" | "proteinGrams",
+): number | null {
+  const positiveValues = values.filter((value) => value > 0);
+  const fitnessTotals = summaries.filter((summary) => {
+    const total = summary[metric];
+    return total !== null && total > 0 && summary.mealCount > 0;
+  });
+  const count = positiveValues.length + fitnessTotals.reduce(
+    (total, summary) => total + summary.mealCount,
+    0,
+  );
+  if (count === 0) {
+    return null;
+  }
+
+  const total = positiveValues.reduce((sum, value) => sum + value, 0) +
+    fitnessTotals.reduce((sum, summary) => sum + (summary[metric] ?? 0), 0);
+  return total / count;
+}
+
 function sortTasksBySchedule(first: Task, second: Task): number {
   const firstDate = getTaskActivityDate(first) ?? "9999-12-31";
   const secondDate = getTaskActivityDate(second) ?? "9999-12-31";
@@ -272,6 +297,8 @@ export function getRecordsForDate(
         .filter(isVisibleOsMeal)
         .filter((record) => record.date === date),
     ),
+    fitnessNutritionSummary:
+      snapshot.fitnessNutritionSummaries?.find((summary) => summary.date === date) ?? null,
     weightRecords: sortByDateThenUpdatedAt(
       getWeightSource(snapshot)
         .filter(isVisibleEntity)
@@ -295,6 +322,8 @@ export function getDashboardStats(
   const rangedMeals = snapshot.mealRecords
     .filter(isVisibleOsMeal)
     .filter((record) => isWithinDateRange(record.date, range.startDate, range.endDate));
+  const rangedFitnessNutritionSummaries = (snapshot.fitnessNutritionSummaries ?? [])
+    .filter((summary) => isWithinDateRange(summary.date, range.startDate, range.endDate));
   const rangedWeights = sortByDateThenUpdatedAt(
     getWeightSource(snapshot)
       .filter(isVisibleEntity)
@@ -314,9 +343,15 @@ export function getDashboardStats(
       totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : null,
     completedTasks,
     totalTasks,
-    averageCalories: averagePositive(rangedMeals.map((record) => record.calories)),
-    averageProteinGrams: averagePositive(
+    averageCalories: averagePositiveWithFitnessSummaries(
+      rangedMeals.map((record) => record.calories),
+      rangedFitnessNutritionSummaries,
+      "calories",
+    ),
+    averageProteinGrams: averagePositiveWithFitnessSummaries(
       rangedMeals.map((record) => record.proteinGrams),
+      rangedFitnessNutritionSummaries,
+      "proteinGrams",
     ),
     weightDeltaKg:
       firstWeight && latestWeight
@@ -407,6 +442,12 @@ export function getCalendarMarkers(
     }
   }
 
+  for (const summary of snapshot.fitnessNutritionSummaries ?? []) {
+    if (isWithinDateRange(summary.date, range.startDate, range.endDate)) {
+      ensureMarker(markers, summary.date).meals = true;
+    }
+  }
+
   for (const record of getWeightSource(snapshot).filter(isVisibleEntity)) {
     if (isWithinDateRange(record.date, range.startDate, range.endDate)) {
       ensureMarker(markers, record.date).weights = true;
@@ -443,17 +484,29 @@ export function getProductivitySeries(
 export function getNutritionSeries(
   meals: MealRecord[],
   range: DateRange,
+  fitnessNutritionSummaries: FitnessNutritionSummaryV1[] = [],
 ): NutritionPoint[] {
   const visibleMeals = meals.filter(isVisibleOsMeal);
+  const summariesByDate = new Map(
+    fitnessNutritionSummaries.map((summary) => [summary.date, summary]),
+  );
 
   return getDateRangeDays(range).map((date) => {
     const dateMeals = visibleMeals.filter((meal) => meal.date === date);
+    const summary = summariesByDate.get(date);
+    const summaries = summary ? [summary] : [];
 
     return {
       date,
-      averageCalories: averagePositive(dateMeals.map((meal) => meal.calories)),
-      averageProteinGrams: averagePositive(
+      averageCalories: averagePositiveWithFitnessSummaries(
+        dateMeals.map((meal) => meal.calories),
+        summaries,
+        "calories",
+      ),
+      averageProteinGrams: averagePositiveWithFitnessSummaries(
         dateMeals.map((meal) => meal.proteinGrams),
+        summaries,
+        "proteinGrams",
       ),
     };
   });

@@ -7,6 +7,8 @@ import {
   StickyNote,
 } from "lucide-react";
 import type { MealRecord, WeightRecord } from "../../../types";
+import type { FitnessNutritionSummaryV1 } from "../../fitness-summary/fitnessNutritionContract";
+import { formatNutritionMetric } from "../../fitness-summary/FitnessNutritionCard";
 import { formatSharedWorkoutLabels, type SharedWorkoutSummary } from "../../fitness-summary/sharedWorkoutSummaries";
 import {
   BACKFILL_LABEL,
@@ -72,6 +74,29 @@ function ReadOnlyMeal({ record }: { record: MealRecord }) {
   );
 }
 
+function ReadOnlyFitnessNutritionSummary({
+  summary,
+}: {
+  summary: FitnessNutritionSummaryV1;
+}) {
+  return (
+    <DailyItem markerClassName="bg-yellow-400">
+      <div className="text-sm font-semibold text-slate-900 dark:text-neutral-100">
+        Fitness 식단 {summary.mealCount}회 요약
+      </div>
+      <div className="mt-1 text-xs text-slate-500 dark:text-neutral-400">
+        합계 {formatNutritionMetric(summary.calories)} kcal · 탄수화물{" "}
+        {formatNutritionMetric(summary.carbsGrams)} g · 단백질{" "}
+        {formatNutritionMetric(summary.proteinGrams)} g · 지방{" "}
+        {formatNutritionMetric(summary.fatGrams)} g
+      </div>
+      <div className="mt-1 text-[11px] text-slate-500 dark:text-neutral-400">
+        개별 메뉴와 원본 식사 정보는 Fitness App에서 확인하세요.
+      </div>
+    </DailyItem>
+  );
+}
+
 function ReadOnlyWeight({ record }: { record: WeightRecord }) {
   return (
     <DailyItem markerClassName="bg-emerald-500">
@@ -100,6 +125,7 @@ export function SelectedDateRecords({
     records.tasks.length +
     records.workoutRecords.length +
     records.mealRecords.length +
+    (records.fitnessNutritionSummary?.mealCount ?? 0) +
     records.weightRecords.length;
 
   return (
@@ -232,10 +258,13 @@ export function SelectedDateRecords({
 
         <DailySection
           title="식사"
-          count={records.mealRecords.length}
+          count={records.mealRecords.length + (records.fitnessNutritionSummary?.mealCount ?? 0)}
           emptyText="식사 기록 없음"
           icon={<Salad className="h-4 w-4 text-yellow-600" />}
         >
+          {records.fitnessNutritionSummary ? (
+            <ReadOnlyFitnessNutritionSummary summary={records.fitnessNutritionSummary} />
+          ) : null}
           {records.mealRecords.map((record) => (
             <ReadOnlyMeal key={record.id} record={record} />
           ))}

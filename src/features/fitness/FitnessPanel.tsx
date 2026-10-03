@@ -5,7 +5,9 @@ import { useMemo, useState } from "react";
 import type {
   FitnessSummaryProjectionV2,
   LegacyWorkoutRecordV1,
+  WeightRecord,
 } from "../../types";
+import type { SyncStatus } from "../../lib/sync/syncTypes";
 import { BACKFILL_LABEL } from "../../lib/dataTrust/backfillMetadata";
 import { formatLocalDate, getCurrentMonthRange } from "./fitnessDate";
 import {
@@ -21,8 +23,9 @@ interface FitnessPanelProps {
   fitnessSummaryProjections: FitnessSummaryProjectionV2[];
   fitnessSharedWorkoutRecords: LegacyWorkoutRecordV1[] | undefined;
   nutritionSummaries: FitnessNutritionSummaryV1[] | undefined;
+  fitnessWeightRecords: WeightRecord[] | undefined;
+  syncStatus: SyncStatus;
   selectedDate: string;
-
 }
 
 type ActionPanel = "stats" | "export" | null;
@@ -32,10 +35,29 @@ export function FitnessPanel({
   fitnessSummaryProjections,
   fitnessSharedWorkoutRecords,
   nutritionSummaries,
+  fitnessWeightRecords,
+  syncStatus,
   selectedDate,
-
 }: FitnessPanelProps) {
   const visibleWorkouts = useMemo(() => getVisibleSharedWorkouts({ fitnessSummaryProjections, fitnessSharedWorkoutRecords }), [fitnessSummaryProjections, fitnessSharedWorkoutRecords]);
+  const visibleWeights = useMemo(() => {
+    if (syncStatus.mode !== "synced") return [];
+    return (fitnessWeightRecords ?? [])
+      .filter((record) => record.deletedAt === null)
+      .sort((first, second) =>
+        second.date.localeCompare(first.date) ||
+        second.updatedAt.localeCompare(first.updatedAt),
+      );
+  }, [fitnessWeightRecords, syncStatus.mode]);
+  const latestNutritionSummary = useMemo(
+    () => [...(nutritionSummaries ?? [])].sort((first, second) => second.date.localeCompare(first.date))[0] ?? null,
+    [nutritionSummaries],
+  );
+  const selectedNutritionSummary = nutritionSummaries?.find((row) => row.date === selectedDate) ?? null;
+  const nutritionCardDate = selectedNutritionSummary
+    ? selectedDate
+    : latestNutritionSummary?.date ?? selectedDate;
+  const selectedDateWeights = visibleWeights.filter((record) => record.date === selectedDate);
   const currentMonthRange = getCurrentMonthRange();
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [rangeStartDate, setRangeStartDate] = useState(
@@ -47,17 +69,15 @@ export function FitnessPanel({
       calculateFitnessStats(
         visibleWorkouts,
         [],
-        [],
-
+        visibleWeights,
         rangeStartDate,
         rangeEndDate,
       ),
     [
       visibleWorkouts,
-      nutritionSummaries,
+      visibleWeights,
       rangeEndDate,
       rangeStartDate,
-
     ],
   );
   const exportMarkdown = useMemo(
@@ -65,17 +85,15 @@ export function FitnessPanel({
       createFitnessMarkdownExport({
         workoutRecords: visibleWorkouts,
         mealRecords: [],
-        weightRecords: [],
-
+        weightRecords: visibleWeights,
         startDate: rangeStartDate,
         endDate: rangeEndDate,
       }),
     [
       visibleWorkouts,
-      nutritionSummaries,
+      visibleWeights,
       rangeEndDate,
       rangeStartDate,
-
     ],
   );
   const exportFileName = createFitnessExportFileName(
@@ -204,6 +222,22 @@ export function FitnessPanel({
                 <p>수신된 식단 {rangedNutrition.length}일</p>
                 <p>일별 합계는 아래 식단 요약에서 확인하세요.</p>
               </MetricPanel>
+              <MetricPanel
+                icon={<Scale className="h-4 w-4 text-emerald-600" />}
+                title="체중"
+                primary={`${stats.weightCount}건`}
+              >
+                {stats.weightCount === 0 ? (
+                  <p>선택 기간에 기록이 없습니다.</p>
+                ) : (
+                  <>
+                    <p>평균 {formatMetric(stats.averageWeightKg)} kg</p>
+                    <p>
+                      {formatMetric(stats.minWeightKg)}–{formatMetric(stats.maxWeightKg)} kg
+                    </p>
+                  </>
+                )}
+              </MetricPanel>
             </div>
           ) : (
             <div className="mt-3">
@@ -220,7 +254,51 @@ export function FitnessPanel({
         </div>
       ) : null}
 
-      <FitnessNutritionCard summaries={nutritionSummaries} date={selectedDate} />
+      <div>
+        <FitnessNutritionCard summaries={nutritionSummaries} date={nutritionCardDate} />
+        {!selectedNutritionSummary && latestNutritionSummary ? (
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-neutral-400">
+            선택 날짜에는 요약이 없어 가장 최근 기록을 표시합니다.
+          </p>
+        ) : null}
+      </div>
+
+      <div className="shrink-0 rounded-md border border-slate-300 bg-white p-3 dark:border-neutral-800 dark:bg-black">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-neutral-100">
+            최근 체중 기록
+          </h3>
+          <span className="rounded-full border border-slate-300 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-neutral-700 dark:text-neutral-300">
+            {visibleWeights.length}건
+          </span>
+        </div>
+        {visibleWeights.length === 0 ? (
+          <p className="mt-2 text-xs text-slate-500 dark:text-neutral-400">
+            {syncStatus.mode === "synced" ? "수신된 체중 기록이 없습니다." : "동기화가 완료되면 Fitness 체중 기록을 표시합니다."}
+          </p>
+        ) : (
+          <>
+            <p className="mt-2 text-xs text-slate-500 dark:text-neutral-400">
+              {selectedDateWeights.length > 0
+                ? `${selectedDate} 기록 ${selectedDateWeights.length}건`
+                : `선택한 날짜의 기록은 없습니다. 가장 최근 기록 ${visibleWeights[0].date}을 표시합니다.`}
+            </p>
+            <div className="mt-2 space-y-1">
+              {visibleWeights.slice(0, 5).map((record) => (
+                <div
+                  key={record.id}
+                  className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2 text-xs dark:border-neutral-800"
+                >
+                  <span className="text-slate-600 dark:text-neutral-300">{record.date}</span>
+                  <span className="font-semibold tabular-nums text-slate-900 dark:text-neutral-100">
+                    {formatMetric(record.weightKg)} kg
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
       <div className="shrink-0 rounded-md border border-slate-300 bg-white p-3 dark:border-neutral-800 dark:bg-black">
         <div className="flex items-center justify-between gap-2">
