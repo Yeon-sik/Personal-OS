@@ -1,44 +1,31 @@
 import {
-  CalendarDays,
   Cloud,
   CloudOff,
-  Dumbbell,
   HardDrive,
   Monitor,
-  NotebookTabs,
-  PanelsTopLeft,
   RefreshCw,
-  Settings,
 } from "lucide-react";
+import { APP_TAB_LABELS, type AppTab } from "../app/navigation";
 import type { Device } from "../types";
 import type { SyncStatus } from "../lib/sync/syncTypes";
+import { getSyncStatusDescription, getSyncStatusLabel } from "./syncStatusPresentation";
 
 export type SaveState = "idle" | "saving" | "saved" | "error";
-export type HeaderView =
-  | "records"
-  | "memo"
-  | "fitness"
-  | "dev-control"
-  | "settings";
+export type HeaderView = AppTab;
 
 interface HeaderBarProps {
   activeView: HeaderView;
   device: Device | null;
   syncStatus: SyncStatus;
   saveState: SaveState;
-  onChangeView: (view: HeaderView) => void;
 }
 
-const viewItems: Array<{
-  view: HeaderView;
-  label: string;
-  icon: typeof NotebookTabs;
-}> = [
-  { view: "records", label: "기록", icon: CalendarDays },
-  { view: "memo", label: "메모", icon: NotebookTabs },
-  { view: "fitness", label: "운동", icon: Dumbbell },
-  { view: "dev-control", label: "Dev Control", icon: PanelsTopLeft },
-];
+const viewDescriptions: Record<AppTab, string> = {
+  home: "오늘의 상태와 다음 행동",
+  records: "날짜별 기록과 상세 내용",
+  projects: "프로젝트와 워크스트림 운영",
+  settings: "동기화와 앱 환경",
+};
 
 function getSaveLabel(saveState: SaveState): string {
   if (saveState === "saving") {
@@ -58,7 +45,7 @@ function getSaveLabel(saveState: SaveState): string {
 
 function getSyncClasses(mode: SyncStatus["mode"]): string {
   if (mode === "synced") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200";
+    return "border-cyan-200/70 bg-cyan-50/60 text-cyan-800 dark:border-cyan-900/60 dark:bg-cyan-950/20 dark:text-cyan-200";
   }
 
   if (mode === "syncing") {
@@ -77,7 +64,6 @@ export function HeaderBar({
   device,
   syncStatus,
   saveState,
-  onChangeView,
 }: HeaderBarProps) {
   const SyncIcon =
     syncStatus.mode === "offline" || syncStatus.mode === "local-only"
@@ -87,59 +73,20 @@ export function HeaderBar({
         : Cloud;
 
   return (
-    <header className="shrink-0 border-b border-slate-200 bg-white px-3 py-2 dark:border-neutral-900 dark:bg-black">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <header className="os-context-bar shrink-0 px-3 pb-2">
+      <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="truncate text-sm font-semibold tracking-normal text-slate-950 dark:text-neutral-50">
-            Yeonsik's Note
+            Personal OS
           </h1>
           <p className="truncate text-[11px] text-slate-500 dark:text-neutral-400">
-            로컬 우선 개인 기록 앱
+            {viewDescriptions[activeView]}
           </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <nav
-            className="grid h-9 shrink-0 grid-cols-4 rounded-md border border-slate-200 bg-slate-50 p-0.5 text-xs dark:border-neutral-800 dark:bg-neutral-950"
-            aria-label="주요 화면"
-          >
-            {viewItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeView === item.view;
-
-              return (
-                <button
-                  key={item.view}
-                  type="button"
-                  onClick={() => onChangeView(item.view)}
-                  className={
-                    isActive
-                      ? "inline-flex min-w-16 items-center justify-center gap-1.5 rounded bg-white px-2 font-semibold text-slate-950 shadow-sm dark:bg-neutral-800 dark:text-neutral-50"
-                      : "inline-flex min-w-16 items-center justify-center gap-1.5 rounded px-2 font-semibold text-slate-500 transition hover:text-slate-900 dark:text-neutral-400 dark:hover:text-neutral-100"
-                  }
-                  aria-current={isActive ? "page" : undefined}
-                >
-                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-          <button
-            type="button"
-            onClick={() => onChangeView("settings")}
-            className={
-              activeView === "settings"
-                ? "inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-950 shadow-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-50"
-                : "inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-500 transition hover:text-slate-900 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100"
-            }
-            aria-current={activeView === "settings" ? "page" : undefined}
-            aria-label="설정"
-            title="설정"
-          >
-            <Settings className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
+        <span className="shrink-0 text-xs font-medium text-slate-500 dark:text-neutral-400">
+          {APP_TAB_LABELS[activeView]}
+        </span>
       </div>
 
       <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
@@ -165,7 +112,7 @@ export function HeaderBar({
           className={`flex h-8 min-w-0 items-center gap-1.5 rounded-md border px-2 ${getSyncClasses(
             syncStatus.mode,
           )}`}
-          title={syncStatus.detail}
+          title={getSyncStatusDescription(syncStatus)}
         >
           <SyncIcon
             className={
@@ -175,7 +122,7 @@ export function HeaderBar({
             }
             aria-hidden="true"
           />
-          <span className="min-w-0 truncate">{syncStatus.label}</span>
+          <span className="min-w-0 truncate">{getSyncStatusLabel(syncStatus.mode)}</span>
           <span
             className={
               syncStatus.isOnline

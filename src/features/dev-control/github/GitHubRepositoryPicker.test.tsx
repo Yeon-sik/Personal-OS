@@ -134,7 +134,7 @@ describe("GitHubRepositoryPicker repository states", () => {
           diagnostic: createDiagnostic("no-installations"),
           error: null,
         },
-        expected: "GitHub App installation이 없습니다.",
+        expected: "설치된 GitHub 앱이 없습니다.",
       },
       {
         state: {
@@ -142,7 +142,7 @@ describe("GitHubRepositoryPicker repository states", () => {
           diagnostic: createDiagnostic("no-repositories"),
           error: null,
         },
-        expected: "현재 사용자에게 허용된 Repository가 없습니다.",
+        expected: "현재 사용자에게 허용된 저장소가 없습니다.",
       },
       {
         state: {
@@ -174,7 +174,7 @@ describe("GitHubRepositoryPicker repository states", () => {
     expect(
       renderer.root
         .findAllByType("button")
-        .some((button) => button.props["aria-label"] === "GitHub Repository octo/Always_Memo"),
+        .some((button) => button.props["aria-label"] === "GitHub 저장소 octo/Always_Memo"),
     ).toBe(true);
     expect(renderedText(renderer)).toContain("/user 200 (1)");
   });

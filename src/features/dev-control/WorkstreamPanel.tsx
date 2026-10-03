@@ -20,6 +20,7 @@ import {
   type WorkstreamChanges,
 } from "./devControlService";
 import type { DevControlActions } from "./useDevControlActions";
+import { ACTION_STATUS_LABELS, ACTION_TYPE_LABELS, KNOWLEDGE_DOCUMENT_TYPE_LABELS, MILESTONE_STATUS_LABELS } from "./devControlLabels";
 
 const WORKSTREAM_STATUSES: DevWorkstreamStatus[] = [
   "ACTIVE",
@@ -333,7 +334,7 @@ export function WorkstreamPanel({
     if (workstreams.length === 0) {
       return (
         <p className="rounded border border-dashed border-slate-300 p-4 text-xs text-slate-500 dark:border-neutral-800 dark:text-neutral-400">
-          Workstream이 없습니다. 여러 Project를 관통하는 공통 작업을 만들어 보세요.
+          워크스트림이 없습니다. 여러 프로젝트를 관통하는 공통 작업을 만들어 보세요.
         </p>
       );
     }
@@ -377,8 +378,8 @@ export function WorkstreamPanel({
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-3 text-[10px] text-slate-500 dark:text-neutral-400">
-                  <span>Project {projectCount}</span>
-                  <span>OPEN Action {openActionCount}</span>
+                  <span>프로젝트 {projectCount}</span>
+                  <span>미완료 작업 {openActionCount}</span>
                 </div>
               </button>
             );
@@ -393,10 +394,10 @@ export function WorkstreamPanel({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-950 dark:text-neutral-50">
-            공통 작업 / Workstreams
+            워크스트림
           </h2>
           <p className="text-[11px] text-slate-500 dark:text-neutral-400">
-            여러 Project를 관통하는 기능·변경·출시 단위
+            여러 프로젝트를 관통하는 기능·변경·출시 단위
           </p>
         </div>
         <button
@@ -404,7 +405,7 @@ export function WorkstreamPanel({
           onClick={openCreate}
           className="rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 dark:bg-white dark:text-black"
         >
-          새 Workstream
+          새 워크스트림
         </button>
       </div>
 
@@ -412,7 +413,7 @@ export function WorkstreamPanel({
 
       {(isCreating || workstream) && (
         <div className="grid gap-3">
-          <Section title={isCreating ? "NEW WORKSTREAM" : "WORKSTREAM OVERVIEW"}>
+          <Section title={isCreating ? "새 워크스트림" : "워크스트림 개요"}>
             <form className="grid gap-2" onSubmit={submitWorkstream}>
               <Field
                 label="이름"
@@ -456,18 +457,18 @@ export function WorkstreamPanel({
                     }}
                     className="rounded border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700"
                   >
-                    Workstream 삭제
+                    워크스트림 삭제
                   </button>
                 ) : null}
               </div>
             </form>
           </Section>
 
-          <Section title="참여 PROJECT">
+          <Section title="참여 프로젝트">
             <div className="grid gap-1">
               {projects.length === 0 ? (
                 <p className="text-xs text-slate-500">
-                  먼저 Project를 만들어 주세요.
+                  먼저 프로젝트를 만들어 주세요.
                 </p>
               ) : (
                 projects.map((project) => {
@@ -492,7 +493,7 @@ export function WorkstreamPanel({
                         onClick={() => onOpenProjectWorkspace(project.id)}
                         className="shrink-0 text-[10px] font-semibold text-teal-700 hover:underline dark:text-teal-300"
                       >
-                        Workspace
+                        작업 공간
                       </button>
                     </div>
                   );
@@ -500,13 +501,13 @@ export function WorkstreamPanel({
               )}
             </div>
             <p className="mt-2 text-[10px] text-slate-500 dark:text-neutral-400">
-              Action 영향 Project는 여기서 선택한 참여 Project 안에서만 지정됩니다.
+              작업의 영향 프로젝트는 여기서 선택한 참여 프로젝트 안에서만 지정됩니다.
             </p>
           </Section>
 
           {!isCreating && workstream ? (
             <>
-              <Section title="MILESTONES">
+              <Section title="마일스톤">
                 <form className="mb-2 flex gap-2" onSubmit={submitMilestone}>
                   <input
                     className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1.5 text-xs dark:border-neutral-700 dark:bg-neutral-950"
@@ -547,7 +548,7 @@ export function WorkstreamPanel({
                       >
                         {MILESTONE_STATUSES.map((status) => (
                           <option key={status} value={status}>
-                            {status}
+                            {MILESTONE_STATUS_LABELS[status]}
                           </option>
                         ))}
                       </select>
@@ -565,7 +566,7 @@ export function WorkstreamPanel({
                 </div>
               </Section>
 
-              <Section title="ACTIONS">
+              <Section title="작업">
                 <form
                   className="mb-2 flex flex-wrap gap-2"
                   onSubmit={submitAction}
@@ -585,7 +586,7 @@ export function WorkstreamPanel({
                   >
                     {ACTION_TYPES.map((type) => (
                       <option key={type} value={type}>
-                        {type}
+                        {ACTION_TYPE_LABELS[type]}
                       </option>
                     ))}
                   </select>
@@ -605,7 +606,7 @@ export function WorkstreamPanel({
                     return (
                       <div key={type} className="grid gap-1">
                         <p className="text-[10px] font-semibold text-slate-500">
-                          {type}
+                          {ACTION_TYPE_LABELS[type]}
                         </p>
                         {typedActions.map((action) => {
                           const impactedLinks = workstreamActionProjects.filter(
@@ -653,7 +654,7 @@ export function WorkstreamPanel({
                                 >
                                   {ACTION_STATUSES.map((status) => (
                                     <option key={status} value={status}>
-                                      {status}
+                                      {ACTION_STATUS_LABELS[status]}
                                     </option>
                                   ))}
                                 </select>
@@ -669,7 +670,7 @@ export function WorkstreamPanel({
                               </div>
                               <div className="grid gap-1">
                                 <p className="text-[10px] font-semibold text-slate-500">
-                                  영향 Project
+                                  영향 프로젝트
                                 </p>
                                 <div className="flex flex-wrap gap-x-3 gap-y-1">
                                   {projects
@@ -703,13 +704,13 @@ export function WorkstreamPanel({
                                 </div>
                                 {impactedLinks.length === 0 ? (
                                   <span className="text-[10px] text-teal-700 dark:text-teal-300">
-                                    공통 작업 · Workstream 전체
+                                    공통 작업 · 워크스트림 전체
                                   </span>
                                 ) : null}
                               </div>
                               <div className="grid gap-1">
                                 <p className="text-[10px] font-semibold text-slate-500">
-                                  dependency
+                                  선행 작업
                                 </p>
                                 {dependencies.map((dependency) => {
                                   const prerequisite = selectedActions.find(
@@ -752,7 +753,7 @@ export function WorkstreamPanel({
                                       }))
                                     }
                                   >
-                                    <option value="">선행 Action 선택</option>
+                                    <option value="">선행 작업 선택</option>
                                     {dependencyOptions.map((candidate) => (
                                       <option
                                         key={candidate.id}
@@ -767,7 +768,7 @@ export function WorkstreamPanel({
                                     onClick={() => addDependency(action.id)}
                                     className="rounded border border-slate-300 px-2 py-1 text-[10px] dark:border-neutral-700"
                                   >
-                                    dependency 추가
+                                    선행 작업 추가
                                   </button>
                                 </div>
                               </div>
@@ -785,11 +786,11 @@ export function WorkstreamPanel({
                 ) : null}
               </Section>
 
-              <Section title="KNOWLEDGE DOCUMENTS">
+              <Section title="지식 문서">
                 <form className="mb-2 flex flex-wrap gap-2" onSubmit={(event) => void submitKnowledgeDocument(event)}>
                   <input className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1.5 text-xs dark:border-neutral-700 dark:bg-neutral-950" placeholder="새 문서 제목" value={knowledgeTitle} onChange={(event) => setKnowledgeTitle(event.target.value)} />
                   <select className="rounded border border-slate-300 bg-transparent text-[10px] dark:border-neutral-700" value={knowledgeType} onChange={(event) => setKnowledgeType(event.target.value as KnowledgeDocumentType)}>
-                    {KNOWLEDGE_DOCUMENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                    {KNOWLEDGE_DOCUMENT_TYPES.map((type) => <option key={type} value={type}>{KNOWLEDGE_DOCUMENT_TYPE_LABELS[type]}</option>)}
                   </select>
                   <button type="submit" disabled={!knowledgeTitle.trim()} className="rounded bg-teal-700 px-2 text-xs text-white disabled:opacity-50">새 문서</button>
                 </form>
@@ -797,14 +798,14 @@ export function WorkstreamPanel({
                   {selectedDocuments.length === 0 ? <p className="text-xs text-slate-500 dark:text-neutral-400">관련 문서가 없습니다.</p> : selectedDocuments.map((document) => <div key={document.id} className="grid gap-1 rounded border border-slate-200 p-2 text-xs dark:border-neutral-800">
                     <div className="flex flex-wrap items-center gap-2">
                       <input className="min-w-0 flex-1 bg-transparent font-medium" value={document.title} onChange={(event) => void actions.updateKnowledgeDocument(document.id, { title: event.target.value })} />
-                      <select className="rounded border border-slate-200 bg-transparent text-[10px] dark:border-neutral-700" value={document.type} onChange={(event) => void actions.updateKnowledgeDocument(document.id, { type: event.target.value as KnowledgeDocumentType })}>{KNOWLEDGE_DOCUMENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select>
+                      <select className="rounded border border-slate-200 bg-transparent text-[10px] dark:border-neutral-700" value={document.type} onChange={(event) => void actions.updateKnowledgeDocument(document.id, { type: event.target.value as KnowledgeDocumentType })}>{KNOWLEDGE_DOCUMENT_TYPES.map((type) => <option key={type} value={type}>{KNOWLEDGE_DOCUMENT_TYPE_LABELS[type]}</option>)}</select>
                       <button type="button" onClick={() => void actions.openKnowledgeDocument(document)} className="text-teal-700 hover:underline dark:text-teal-300">열기</button>
                     </div>
                     <span className="truncate text-[10px] text-slate-500 dark:text-neutral-400">{document.relativePath}</span>
                   </div>)}
                 </div>
                 {knowledgeError ? <p role="alert" className="mt-2 text-[11px] text-rose-700 dark:text-rose-300">{knowledgeError}</p> : null}
-                <p className="mt-2 text-[10px] text-slate-500 dark:text-neutral-400">Workstream 문서는 참여 중인 모든 Project Home에 Related Documents backlink로 표시됩니다.</p>
+                <p className="mt-2 text-[10px] text-slate-500 dark:text-neutral-400">워크스트림 문서는 참여 중인 모든 프로젝트 홈 문서에 관련 문서 링크로 표시됩니다.</p>
               </Section>
             </>
           ) : null}

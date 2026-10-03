@@ -20,10 +20,10 @@ const emptyConfigStatus: GitHubConfigStatus = {
 };
 
 const sourceLabels: Record<GitHubConfigStatus["source"], string> = {
-  "local-settings": "local-settings",
-  env: "env",
-  file: "file",
-  none: "none",
+  "local-settings": "앱 설정",
+  env: "환경 변수",
+  file: "설정 파일",
+  none: "미설정",
 };
 
 function errorMessage(error: unknown): string {
@@ -117,14 +117,14 @@ export function GitHubSettingsSection({
           <span>GitHub</span>
         </div>
         <span className="text-xs font-medium text-slate-500 dark:text-neutral-400">
-          source: {sourceLabels[configStatus.source]}
+          설정 출처: {sourceLabels[configStatus.source]}
         </span>
       </div>
 
       <form onSubmit={handleSave} className="mt-3 space-y-3">
         <label className="block space-y-1.5">
           <span className="text-xs font-medium text-slate-600 dark:text-neutral-400">
-            Client ID
+            클라이언트 ID
           </span>
           <input
             type="text"
@@ -141,7 +141,7 @@ export function GitHubSettingsSection({
 
         <label className="block space-y-1.5">
           <span className="text-xs font-medium text-slate-600 dark:text-neutral-400">
-            App Slug (선택)
+            앱 식별명 (선택)
           </span>
           <input
             type="text"
@@ -157,7 +157,7 @@ export function GitHubSettingsSection({
         </label>
 
         <p className="text-[11px] leading-4 text-slate-500 dark:text-neutral-400">
-          Client ID와 App Slug는 공개 식별자입니다. Secret/Private Key는 입력하지 않습니다.
+          클라이언트 ID와 앱 식별명은 공개 식별자입니다. 비밀 키와 개인 키는 입력하지 않습니다.
         </p>
 
         <div className="flex items-center gap-2">

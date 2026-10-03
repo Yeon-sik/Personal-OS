@@ -43,7 +43,7 @@ export function QuickActionOverlay({
   const [activeSection, setActiveSection] =
     useState<QuickActionSection>("task");
   const backfillInput = isBackfill ? createBackfillInput() : undefined;
-  const actionTitle = isBackfill ? "누락 보강" : "Quick Action";
+  const actionTitle = isBackfill ? "누락 보강" : "빠른 기록";
   const actionDescription = isBackfill
     ? "지난 날짜에 빠진 기록만 보강으로 추가합니다."
     : "선택한 날짜에 새 기록을 추가합니다.";

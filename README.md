@@ -1,8 +1,8 @@
 # Personal OS (Yeonsik's Note)
 
-Personal OS는 Tauri v2, React, TypeScript, Vite, Tailwind CSS와 Supabase로 구성한 로컬 우선 개인 기록 앱입니다. 메모, 할 일, 운동·식사·체중 기록은 네트워크나 Supabase 설정이 없어도 로컬에서 먼저 동작하고, 설정과 로그인이 완료되면 같은 계정의 여러 기기 사이에서 동기화됩니다.
+Personal OS는 Tauri v2, React, TypeScript, Vite, Tailwind CSS와 Supabase로 구성한 로컬 우선 개인 기록 앱입니다. 메모·할 일·운동·식사·체중과 프로젝트·워크스트림 기록을 로컬 snapshot에 저장합니다. Supabase 설정 없이도 로컬에서 사용할 수 있고, 설정과 로그인이 완료되면 지원하는 기록을 같은 계정의 기기 사이에서 동기화합니다.
 
-이 문서의 기능 설명은 2026-08-01 저장소 소스와 테스트를 기준으로 합니다. 파일 존재나 로컬 빌드가 실제 Windows 설치 환경, 실제 Supabase 프로젝트, 다중 기기 또는 배포 상태를 증명하지는 않습니다. 현재 구조 결정과 검증 경계는 [현재 아키텍처 ADR](docs/adr/2026-08-01-current-architecture.md), 배포 전 확인 사항은 [릴리스 준비 문서](docs/RELEASE_READINESS.md)를 확인하세요.
+이 문서의 기능 설명은 공개 `main@e291af7` (2026-09-24)의 소스와 문서를 기준으로 합니다. 파일 존재나 로컬 빌드가 실제 Windows 설치 환경, 실제 Supabase 프로젝트, 다중 기기 또는 배포 상태를 증명하지는 않습니다. 현재 구조 결정과 검증 경계는 [현재 아키텍처 ADR](docs/adr/2026-08-01-current-architecture.md), 배포 전 확인 사항은 [릴리스 준비 문서](docs/RELEASE_READINESS.md)를 확인하세요.
 
 ## 현재 기능
 
@@ -27,7 +27,7 @@ Personal OS는 Tauri v2, React, TypeScript, Vite, Tailwind CSS와 Supabase로 �
 - 식사 열량, 단백질, 탄수화물, 지방 기록
 - 체중 기록
 - 기간별 통계와 Markdown 내보내기
-- FitnessApp과 공유하는 Fitness Record Contract v1 호환 필드
+- 기존 [Fitness Record Contract v1](docs/FITNESS_RECORD_CONTRACT_V1.md) 기록 호환 경로와 [Fitness Summary Projection v2](docs/FITNESS_SUMMARY_PROJECTION_V2.md) 조회 모델
 
 ### Quick Capture와 데스크톱 통합
 
@@ -38,6 +38,13 @@ Personal OS는 Tauri v2, React, TypeScript, Vite, Tailwind CSS와 Supabase로 �
 - 전용 Tauri API가 없는 브라우저 환경에서는 동적 import 실패를 fallback으로 처리
 
 데스크톱 코드는 저장소에 구현되어 있지만 tray, 전역 단축키, 자동 실행, close-to-hide는 설치된 Windows 바이너리에서 별도 수동 smoke가 필요합니다.
+
+### 프로젝트·워크스트림·지식 문서
+
+- 프로젝트, 마일스톤, 작업, 아이디어, 이력과 여러 프로젝트를 묶는 워크스트림을 기록합니다.
+- Project Workspace는 이 기록을 편집하고 GitHub 저장소 정보를 읽기 전용으로 연결합니다.
+- Knowledge Vault는 사용자가 선택한 로컬 폴더에 프로젝트·워크스트림·지식 문서의 Markdown projection을 맞춥니다. 파일시스템 동작은 Tauri 환경에서 확인해야 합니다.
+- 설정에서 여는 별도 Supabase DB Editor는 온라인 연결과 PAT를 사용해 접근 가능한 프로젝트·테이블을 조회하고, 기본 키로 지정한 한 행의 변경된 열을 갱신하도록 구현되어 있습니다. 로컬 기록 동기화와 별도 흐름이며 실제 원격 권한은 별도 검증 대상입니다.
 
 ## 기술 스택
 
@@ -60,7 +67,9 @@ src/main.tsx
         -> features/notes/useNoteActions
         -> features/tasks/useTaskActions
         -> features/fitness/useFitnessRecordActions
+        -> features/dev-control/useDevControlActions
      -> RecordsPanel / MemoPanel / ChecklistPanel / FitnessPanel / SettingsPanel
+     -> Project Workspace / Knowledge Vault / Dev Control Panel
      -> useQuickCapture
 
 syncClientFactory
@@ -99,9 +108,12 @@ src/
     settings/
   features/
     command-center/quickActions/
+    db-editor/
+    dev-control/
     finance/
     fitness/
     fitness-summary/
+    knowledge-vault/
     notes/
     quick-capture/
     records/
@@ -128,34 +140,35 @@ docs/
 
 ## 데이터 모델
 
-로컬 저장의 단위는 `LocalDataSnapshot`입니다.
+로컬 저장의 단위는 `LocalDataSnapshot`입니다. 아래는 [현재 타입 정의](src/types/entities.ts)의 필드 묶음입니다.
 
 ```text
 LocalDataSnapshot
-  notes: Note[]
-  tasks: Task[]
-  workoutRecords: WorkoutRecord[]
-  mealRecords: MealRecord[]
-  weightRecords: WeightRecord[]
-  devices: Device[]
+  notes / tasks / devices
+  workoutRecords (legacy v1) / fitnessSummaryProjections (v2 read model)
+  mealRecords / weightRecords
+  projects / projectMilestones / projectActions / projectIdeas / projectHistory
+  workstreams / workstreamProjects / workstreamMilestones
+  workstreamActions / workstreamActionProjects / workstreamActionDependencies
+  knowledgeDocuments
 ```
 
 동기화 대상 엔티티는 `id`, `createdAt`, `updatedAt`, `deletedAt`, `deviceId`와 누락 보강 메타데이터를 공유합니다. 삭제는 배열에서 row를 제거하는 hard delete가 아니라 `deletedAt`을 기록하는 tombstone입니다. 병합은 `updatedAt`이 최신인 row를 선택하고 timestamp가 같으면 tombstone을 우선합니다.
 
-Fitness 공유 row는 `sourceApp`, `scope`, `metadata`, `contractVersion`을 사용합니다. 자세한 계약은 [Fitness Record Contract v1](docs/FITNESS_RECORD_CONTRACT_V1.md)에 있습니다.
+기존 Fitness 기록 row는 `sourceApp`, `scope`, `metadata`, `contractVersion`을 사용합니다. v1 호환 경로는 [Fitness Record Contract v1](docs/FITNESS_RECORD_CONTRACT_V1.md), 완료 운동 요약의 별도 읽기 모델은 [Fitness Summary Projection v2](docs/FITNESS_SUMMARY_PROJECTION_V2.md)를 따릅니다.
 
 ## 저장과 동기화 순서
 
 1. runtime 설정과 로컬 device 정보를 읽습니다.
-2. 선택된 sync client에서 Auth 상태를 확인합니다.
-3. Auth 상태 확인이 끝나면 `localStorage` snapshot을 불러옵니다.
+2. `localStorage` snapshot을 먼저 불러와 화면 상태를 복원합니다. 읽기에 실패하면 원격 작업으로 진행하지 않고 오류를 표시합니다.
+3. 그 다음 선택된 sync client에서 Auth 상태를 확인합니다.
 4. Supabase가 설정되지 않았으면 local-only client를 사용합니다. 설정되어도 인증되지 않았으면 원격 작업을 중단하고 로컬 snapshot을 유지합니다.
 5. 인증된 경우 원격 snapshot을 pull하고 로컬 snapshot과 병합합니다.
 6. 사용자 변경은 React state에 먼저 반영하고 debounce 후 로컬 저장과 remote push를 수행합니다.
 7. Realtime 변경은 현재 snapshot에 병합하고 구독 해제 시 listener를 정리합니다.
 8. heartbeat와 active-device 갱신은 인증된 Supabase mode에서만 동작합니다.
 
-hydrate가 끝난 뒤 발생한 pull/push 오류는 편집 자체를 직접 막지 않으며 동기화 오류를 UI에 표시합니다. 다만 현재 Auth session 초기화가 `storage.load()`보다 먼저 실행되므로 session 조회 자체가 예외를 던지는 시작 경로에서는 기존 local snapshot 복구를 보장하지 못합니다. 이 데이터 보존 위험과 회귀 테스트는 [GitHub issue #31](https://github.com/Yeon-sik/Always_Memo/issues/31)에서 추적합니다.
+로컬 snapshot 복원과 원격 동기화의 성공 여부는 별도로 표시합니다. Auth 또는 원격 요청 오류가 로컬 저장 성공을 뜻하거나 부정하지 않으며, 실제 다중 기기 동기화는 대상 Supabase 프로젝트에서 별도 확인이 필요합니다.
 
 ## Supabase 설정
 
@@ -212,6 +225,9 @@ Personal OS가 직접 동기화하는 테이블은 다음과 같습니다.
 - `workout_records`
 - `meal_records`
 - `weight_records`
+- 프로젝트·마일스톤·작업·아이디어·이력, 워크스트림과 연결·의존성, `knowledge_documents` 관련 테이블
+
+`fitness_summary_projections_v2`는 완료 운동 요약의 읽기 모델입니다. Personal OS가 쓰지 않는 이 projection의 생성·갱신은 FitnessApp 경계에 있습니다.
 
 `workout_exercises`와 `workout_sets`는 같은 Fitness contract에 포함되지만 FitnessApp이 상세 row를 소유합니다. Personal OS는 compact parent summary를 사용합니다.
 
@@ -274,7 +290,7 @@ src-tauri/target/release/bundle/nsis/Yeonsik_Note_1.0.0_x64-setup.exe
 
 - 현재 구조와 결정: [docs/adr/2026-08-01-current-architecture.md](docs/adr/2026-08-01-current-architecture.md)
 - DB 운영: [supabase/README.codex.md](supabase/README.codex.md)
-- Fitness 공유 계약: [docs/FITNESS_RECORD_CONTRACT_V1.md](docs/FITNESS_RECORD_CONTRACT_V1.md)
+- Fitness 공유 계약: [v1 기록 호환](docs/FITNESS_RECORD_CONTRACT_V1.md), [v2 완료 운동 요약](docs/FITNESS_SUMMARY_PROJECTION_V2.md)
 - 배포 gate: [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md)
 - Dev Control GitHub read-only 설정: [docs/specs/dev-control-github-readonly.md](docs/specs/dev-control-github-readonly.md)
 - 외부 소개 문서: `docs/Project_Intro.md`, `docs/Project_Detail.md`

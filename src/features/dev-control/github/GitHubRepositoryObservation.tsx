@@ -11,7 +11,7 @@ const verificationLabels = {
   "verified-latest": "검증 최신",
   "changed-since-verification": "검증 이후 변경 있음",
   "no-verification": "검증 정보 없음",
-  "remote-error": "remote 조회 실패",
+  "remote-error": "원격 조회 실패",
 } as const;
 
 export function GitHubRepositoryObservation({
@@ -45,7 +45,7 @@ export function GitHubRepositoryObservation({
   return (
     <section className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-950">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-xs font-bold tracking-wide text-slate-700 dark:text-neutral-200">GITHUB OBSERVATION</h3>
+        <h3 className="text-xs font-bold tracking-wide text-slate-700 dark:text-neutral-200">GitHub 저장소 상태</h3>
         <button
           type="button"
           disabled={readState?.loading}
@@ -58,9 +58,9 @@ export function GitHubRepositoryObservation({
 
       <div className="grid gap-1 text-[11px] text-slate-600 dark:text-neutral-300">
         <p>
-          Repository: <strong>{project.githubOwner}/{project.githubRepo}</strong>
+          저장소: <strong>{project.githubOwner}/{project.githubRepo}</strong>
         </p>
-        <p>tracked branch: <strong>{project.branch}</strong></p>
+        <p>추적 브랜치: <strong>{project.branch}</strong></p>
         <p>
           상태: <strong>{readState?.loading ? "조회 중" : verificationLabels[verificationState]}</strong>
         </p>
@@ -75,7 +75,7 @@ export function GitHubRepositoryObservation({
       {model ? (
         <>
           <div className="grid gap-1 rounded border border-slate-200 p-2 text-[11px] dark:border-neutral-800">
-            <p className="font-semibold">Remote HEAD</p>
+            <p className="font-semibold">원격 최신 커밋</p>
             {model.remoteHead ? (
               <>
                 <a href={model.remoteHead.htmlUrl} target="_blank" rel="noreferrer" className="break-all font-mono text-teal-700 underline dark:text-teal-300">
@@ -85,19 +85,19 @@ export function GitHubRepositoryObservation({
                 <p className="text-slate-500">{formatTimestamp(model.remoteHead.committedAt)}</p>
               </>
             ) : (
-              <p className="text-slate-500">commit이 없는 branch입니다.</p>
+              <p className="text-slate-500">커밋이 없는 브랜치입니다.</p>
             )}
           </div>
 
           <div className="grid gap-1">
-            <p className="text-[11px] font-semibold text-slate-700 dark:text-neutral-200">Commit History</p>
+            <p className="text-[11px] font-semibold text-slate-700 dark:text-neutral-200">커밋 이력</p>
             {commitHistory.error ? (
               <p role="alert" className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
                 {commitHistory.error}
               </p>
             ) : null}
             {commitHistory.commits.length === 0 ? (
-              <p className="text-[11px] text-slate-500">{commitHistory.loading ? "commit history를 불러오는 중입니다." : "commit history가 없습니다."}</p>
+              <p className="text-[11px] text-slate-500">{commitHistory.loading ? "커밋 이력을 불러오는 중입니다." : "커밋 이력이 없습니다."}</p>
             ) : (
               commitHistory.commits.map((commit) => (
                 <a key={commit.sha} href={commit.htmlUrl} target="_blank" rel="noreferrer" className="grid gap-0.5 rounded border border-slate-200 p-2 text-[11px] hover:border-teal-400 dark:border-neutral-800">
@@ -120,14 +120,14 @@ export function GitHubRepositoryObservation({
           </div>
 
           <div className="grid gap-1">
-            <p className="text-[11px] font-semibold text-slate-700 dark:text-neutral-200">open PR 요약</p>
+            <p className="text-[11px] font-semibold text-slate-700 dark:text-neutral-200">열린 변경 요청</p>
             {model.openPullRequests.length === 0 ? (
-              <p className="text-[11px] text-slate-500">열린 PR이 없습니다.</p>
+              <p className="text-[11px] text-slate-500">열린 변경 요청이 없습니다.</p>
             ) : (
               model.openPullRequests.map((pullRequest) => (
                 <a key={pullRequest.number} href={pullRequest.htmlUrl} target="_blank" rel="noreferrer" className="rounded border border-slate-200 p-2 text-[11px] hover:border-teal-400 dark:border-neutral-800">
                   <span className="font-semibold">#{pullRequest.number} {pullRequest.title}</span>
-                  <span className="block text-slate-500">{pullRequest.headBranch ?? "?"} → {pullRequest.baseBranch ?? "?"}{pullRequest.draft ? " · draft" : ""}</span>
+                  <span className="block text-slate-500">{pullRequest.headBranch ?? "?"} → {pullRequest.baseBranch ?? "?"}{pullRequest.draft ? " · 초안" : ""}</span>
                 </a>
               ))
             )}
@@ -139,7 +139,7 @@ export function GitHubRepositoryObservation({
           </div>
         </>
       ) : (
-        <p className="text-[11px] text-slate-500">{readState?.loading ? "GitHub에서 읽는 중입니다." : "새로고침을 눌러 remote 상태를 조회하세요."}</p>
+        <p className="text-[11px] text-slate-500">{readState?.loading ? "GitHub에서 읽는 중입니다." : "새로고침을 눌러 원격 상태를 조회하세요."}</p>
       )}
     </section>
   );
