@@ -7,6 +7,7 @@ import type {
   Task,
   WeightRecord,
 } from "../../types";
+import type { FitnessNutritionSummaryV1 } from "../fitness-summary/fitnessNutritionContract";
 import {
   getCalendarMarkers,
   getDashboardStats,
@@ -91,6 +92,24 @@ const deletedWeight: WeightRecord = {
   deletedAt: "2026-06-09T00:00:01.000Z",
 };
 
+const fitnessNutritionSummary: FitnessNutritionSummaryV1 = {
+  id: "2026-06-09",
+  date: "2026-06-09",
+  contractVersion: 1,
+  mealCount: 3,
+  calories: 1800,
+  carbsGrams: 150,
+  proteinGrams: 120,
+  fatGrams: 60,
+  updatedAt: "2026-06-09T18:00:00.000Z",
+};
+
+const fitnessWeight: WeightRecord = {
+  ...liveWeight,
+  id: "fitness-weight-live",
+  weightKg: 70.5,
+};
+
 const directTask: Task = {
   id: "task-direct",
   createdAt: "2026-06-09T00:00:00.000Z",
@@ -147,6 +166,21 @@ describe("recordAggregation", () => {
     expect(records.mealRecords).toHaveLength(1);
     expect(records.weightRecords).toHaveLength(1);
     expect(records.workoutRecords[0].id).toBe("workout-live");
+  });
+
+  it("shows Fitness-owned weight and nutrition read models on their recorded date", () => {
+    const connectedSnapshot = {
+      ...snapshot,
+      fitnessNutritionSummaries: [fitnessNutritionSummary],
+      fitnessWeightRecords: [fitnessWeight],
+    };
+
+    const records = getRecordsForDate(connectedSnapshot, "2026-06-09");
+    const markers = getCalendarMarkers(connectedSnapshot, "2026-06-09");
+
+    expect(records.fitnessNutritionSummary).toEqual(fitnessNutritionSummary);
+    expect(records.weightRecords).toEqual([fitnessWeight]);
+    expect(markers["2026-06-09"]).toMatchObject({ meals: true, weights: true });
   });
 
   it("shows completed Summary Projection v2 rows", () => {
@@ -271,6 +305,28 @@ describe("recordAggregation", () => {
     expect(stats.averageProteinGrams).toBe(40);
     expect(series[0].averageCalories).toBe(600);
     expect(series[0].averageProteinGrams).toBe(40);
+  });
+
+  it("uses Fitness daily nutrition totals in the daily trend and dashboard averages", () => {
+    const connectedSnapshot = {
+      ...snapshot,
+      mealRecords: [],
+      fitnessNutritionSummaries: [fitnessNutritionSummary],
+      fitnessWeightRecords: [fitnessWeight],
+    };
+    const range = { startDate: "2026-06-09", endDate: "2026-06-09" };
+    const series = getNutritionSeries([], range, [fitnessNutritionSummary]);
+    const stats = getDashboardStats(connectedSnapshot, range);
+
+    expect(series[0]).toMatchObject({
+      averageCalories: 600,
+      averageProteinGrams: 40,
+    });
+    expect(stats).toMatchObject({
+      averageCalories: 600,
+      averageProteinGrams: 40,
+      latestWeightKg: 70.5,
+    });
   });
 
   it("keeps Fitness meal details out of OS date records even when the legacy scope is both", () => {

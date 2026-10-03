@@ -1,6 +1,7 @@
-import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LocalDataSnapshot, Task } from "../../types";
+import type { FitnessNutritionSummaryV1 } from "../fitness-summary/fitnessNutritionContract";
 import type { SyncStatus } from "../../lib/sync/syncTypes";
 import { QuickActionOverlay } from "../command-center/quickActions/QuickActionOverlay";
 import { RecordCalendar } from "./RecordCalendar";
@@ -63,9 +64,21 @@ const syncStatus: SyncStatus = {
   isConfigured: false,
 };
 
+const fitnessNutritionSummary: FitnessNutritionSummaryV1 = {
+  id: today,
+  date: today,
+  contractVersion: 1,
+  mealCount: 2,
+  calories: 1200,
+  carbsGrams: 100,
+  proteinGrams: 80,
+  fatGrams: 40,
+  updatedAt: "2026-10-02T18:00:00.000Z",
+};
+
 const renderers: ReactTestRenderer[] = [];
 
-function renderPanel(selectedDate = today) {
+function renderPanel(selectedDate = today, snapshotOverride: LocalDataSnapshot = snapshot) {
   const callbacks = {
     loadFinanceDailySummaries: vi.fn(async () => []),
     onAddNoteForDate: vi.fn(),
@@ -80,7 +93,7 @@ function renderPanel(selectedDate = today) {
     renderer = create(
       <RecordsPanel
         selectedDate={selectedDate}
-        snapshot={snapshot}
+        snapshot={snapshotOverride}
         syncStatus={syncStatus}
         financeEnabled={false}
         {...callbacks}
@@ -89,6 +102,12 @@ function renderPanel(selectedDate = today) {
   });
   renderers.push(renderer);
   return { renderer, callbacks };
+}
+
+function textContent(instance: ReactTestInstance): string {
+  return instance.children
+    .map((child) => typeof child === "string" ? child : textContent(child))
+    .join("");
 }
 
 beforeEach(() => {
@@ -142,6 +161,20 @@ describe("RecordsPanel calendar-first record hub", () => {
     expect(renderer.root.findAllByType(QuickActionOverlay)).toHaveLength(0);
     act(() => { vi.runOnlyPendingTimers(); });
     expect(source.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the Fitness daily nutrition summary in selected-date records", () => {
+    const { renderer } = renderPanel(today, {
+      ...snapshot,
+      fitnessNutritionSummaries: [fitnessNutritionSummary],
+    });
+    expect(renderer.root.findByType(SelectedDateRecords).props.records.fitnessNutritionSummary)
+      .toEqual(fitnessNutritionSummary);
+    const rendered = textContent(renderer.root.findByType(SelectedDateRecords));
+
+    expect(rendered).toContain("Fitness 식단 2회 요약");
+    expect(rendered).toContain("1,200 kcal");
+    expect(rendered).toContain("개별 메뉴와 원본 식사 정보는 Fitness App에서 확인하세요.");
   });
 
   it("retains the past-date confirmation and backfill mode", () => {
