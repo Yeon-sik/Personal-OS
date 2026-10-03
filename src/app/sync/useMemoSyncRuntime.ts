@@ -53,6 +53,8 @@ const snapshotCollections = [
   "tasks",
   "workoutRecords",
   "fitnessSummaryProjections",
+  "fitnessNutritionSummaries",
+  "fitnessWeightRecords",
   "mealRecords",
   "weightRecords",
   "projects",
@@ -74,8 +76,8 @@ function hasEntitySnapshotChanges(
   next: LocalDataSnapshot,
 ): boolean {
   return snapshotCollections.some((collection) => {
-    const currentEntities = current[collection];
-    const nextEntities = next[collection];
+    const currentEntities = current[collection] ?? [];
+    const nextEntities = next[collection] ?? [];
 
     if (currentEntities.length !== nextEntities.length) {
       return true;
@@ -398,7 +400,10 @@ export function useMemoSyncRuntime(
           setError(message);
         });
       },
-      onError: (message) => setError(message),
+      onError: (message) => {
+        setError(message);
+        setSyncStatus((current) => ({ ...current, mode: "error", label: "error", detail: message }));
+      },
     });
     const heartbeatSubscription = syncClient.startHeartbeat(context);
 

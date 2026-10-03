@@ -80,7 +80,10 @@ export function App() {
       notes: memo.notes,
       tasks: memo.tasks,
       workoutRecords: memo.workoutRecords,
+      fitnessSharedWorkoutRecords: memo.fitnessSharedWorkoutRecords,
       fitnessSummaryProjections: memo.fitnessSummaryProjections,
+      fitnessNutritionSummaries: memo.fitnessNutritionSummaries,
+      fitnessWeightRecords: memo.fitnessWeightRecords,
       mealRecords: memo.mealRecords,
       weightRecords: memo.weightRecords,
       devices: memo.activeDevices,
@@ -99,7 +102,10 @@ export function App() {
     }),
     [
       memo.activeDevices,
+      memo.fitnessSharedWorkoutRecords,
       memo.fitnessSummaryProjections,
+      memo.fitnessNutritionSummaries,
+      memo.fitnessWeightRecords,
       memo.mealRecords,
       memo.notes,
       memo.projectActions,
@@ -225,9 +231,9 @@ export function App() {
                 ) : (
                   <FitnessPanel
                     fitnessSummaryProjections={memo.fitnessSummaryProjections}
-                    mealRecords={memo.mealRecords}
+                    fitnessSharedWorkoutRecords={memo.fitnessSharedWorkoutRecords}
+                    nutritionSummaries={memo.fitnessNutritionSummaries}
                     selectedDate={selectedDate}
-                    weightRecords={memo.weightRecords}
                   />
                 )}
               </RecordHub>

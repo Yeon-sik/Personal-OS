@@ -398,6 +398,10 @@ export interface Database {
       };
     };
     Views: {
+      fitness_nutrition_summary_v1: {
+        Row: { id: string; user_id: string; date: string; contract_version: 1; meal_count: number; calories: number | null; carbs_grams: number | null; protein_grams: number | null; fat_grams: number | null; updated_at: string };
+        Relationships: [];
+      };
       finance_summary_daily: {
         Row: FinanceDailySummaryRow;
         Relationships: [];
@@ -414,6 +418,7 @@ export type SnapshotTableName =
   | "tasks"
   | "workout_records"
   | "fitness_summary_projections_v2"
+  | "fitness_nutrition_summary_v1"
   | "meal_records"
   | "weight_records"
   | "devices"
@@ -430,4 +435,4 @@ export type SnapshotTableName =
   | "workstream_action_dependencies"
   | "knowledge_documents";
 
-export type RealtimeTableName = Exclude<SnapshotTableName, "devices">;
+export type RealtimeTableName = Exclude<SnapshotTableName, "devices" | "fitness_nutrition_summary_v1">;

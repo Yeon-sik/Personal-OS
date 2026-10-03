@@ -82,6 +82,7 @@ create table if not exists public.workstream_actions (
   updated_at timestamptz not null,
   deleted_at timestamptz,
   device_id text not null,
+  constraint workstream_actions_user_id_id_key unique (user_id, id),
   constraint workstream_actions_workstream_fk
     foreign key (user_id, workstream_id)
     references public.workstreams(user_id, id),

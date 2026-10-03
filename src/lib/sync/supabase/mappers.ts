@@ -152,6 +152,9 @@ export function workoutRecordFromRow(row: WorkoutRecordRow): LegacyWorkoutRecord
 export function fitnessSummaryProjectionV2FromRow(
   row: FitnessSummaryProjectionV2Row,
 ): FitnessSummaryProjectionV2 {
+  if (row.contract_version !== 2 || row.completion_status !== "completed") {
+    throw new Error("Unsupported Fitness workout summary contract.");
+  }
   return {
     ...auditFieldsFromRow(row, row.updated_at),
     id: row.id,

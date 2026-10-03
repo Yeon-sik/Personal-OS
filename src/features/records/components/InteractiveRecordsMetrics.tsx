@@ -152,21 +152,21 @@ export function BarSeries({
   interaction?: ChartInteractionHandlers;
   pointLabels?: string[];
   toneClassName: string;
-  values: number[];
+  values: Array<number | null>;
 }) {
-  const maxValue = Math.max(...values, 1);
+  const maxValue = Math.max(...values.flatMap((value) => value === null ? [] : [value]), 1);
 
   return (
     <div className="relative h-16">
       <div className="flex h-16 items-end gap-1 overflow-hidden">
         {values.map((value, index) => {
           const isActive = interaction?.activeIndex === index;
-
+          const numericValue = value ?? 0;
           return (
             <span
-              key={`${index}-${value}`}
-              className={`min-w-1 flex-1 rounded-t-sm transition-all ${value > 0 ? toneClassName : "bg-slate-200 dark:bg-neutral-800"} ${isActive ? "opacity-100 ring-2 ring-slate-400/70 ring-offset-1 ring-offset-white dark:ring-neutral-500 dark:ring-offset-black" : "opacity-80"}`}
-              style={{ height: `${Math.max(8, (value / maxValue) * 100)}%` }}
+              key={`${index}-${value ?? "unknown"}`}
+              className={`min-w-1 flex-1 rounded-t-sm transition-all ${value === null ? "border border-dashed border-slate-400 bg-slate-100 dark:border-neutral-600 dark:bg-neutral-900" : numericValue > 0 ? toneClassName : "bg-slate-200 dark:bg-neutral-800"} ${isActive ? "opacity-100 ring-2 ring-slate-400/70 ring-offset-1 ring-offset-white dark:ring-neutral-500 dark:ring-offset-black" : "opacity-80"}`}
+              style={{ height: `${value === null ? 8 : Math.max(8, (numericValue / maxValue) * 100)}%` }}
             />
           );
         })}
@@ -176,7 +176,7 @@ export function BarSeries({
         points={values.map((value, index) => ({
           ariaLabel:
             pointLabels?.[index] ??
-            `${index + 1}번째 값 ${value.toLocaleString("ko-KR")}`,
+            (value === null ? `${index + 1}번째 값 미확인` : `${index + 1}번째 값 ${value.toLocaleString("ko-KR")}`),
         }))}
       />
     </div>

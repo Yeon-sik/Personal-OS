@@ -68,9 +68,7 @@ import type {
 const REALTIME_TABLES: RealtimeTableName[] = [
   "notes",
   "tasks",
-  "workout_records",
   "fitness_summary_projections_v2",
-  "meal_records",
   "weight_records",
   "projects",
   "project_milestones",
@@ -173,7 +171,7 @@ export function applyRemoteWeightRecord(
 ): LocalDataSnapshot {
   return {
     ...snapshot,
-    weightRecords: mergeEntities(snapshot.weightRecords, [remoteRecord]),
+    fitnessWeightRecords: mergeEntities(snapshot.fitnessWeightRecords ?? [], [remoteRecord]),
   };
 }
 
@@ -326,10 +324,7 @@ export function applyRealtimePayload(
     case "tasks":
       return applyRemoteTask(snapshot, taskFromRow(row as TaskRow));
     case "workout_records":
-      return applyRemoteWorkoutRecord(
-        snapshot,
-        workoutRecordFromRow(row as WorkoutRecordRow),
-      );
+      return null;
     case "fitness_summary_projections_v2":
       return applyRemoteFitnessSummaryProjectionV2(
         snapshot,
@@ -338,15 +333,13 @@ export function applyRealtimePayload(
         ),
       );
     case "meal_records":
-      return applyRemoteMealRecord(
-        snapshot,
-        mealRecordFromRow(row as MealRecordRow),
-      );
-    case "weight_records":
-      return applyRemoteWeightRecord(
-        snapshot,
-        weightRecordFromRow(row as WeightRecordRow),
-      );
+      return null;
+    case "weight_records": {
+      const remoteRecord = weightRecordFromRow(row as WeightRecordRow);
+      return remoteRecord.sourceApp === "fitness" && (remoteRecord.scope === "fitness" || remoteRecord.scope === "both")
+        ? applyRemoteWeightRecord(snapshot, remoteRecord)
+        : null;
+    }
     case "projects":
       return applyRemoteProject(snapshot, projectFromRow(row as ProjectRow));
     case "project_milestones":

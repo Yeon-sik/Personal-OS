@@ -1,4 +1,5 @@
-import type { Device, LocalDataSnapshot } from "../../../types";
+import { fitnessNutritionSummaryFromRow } from "../../../features/fitness-summary/fitnessNutritionContract";
+import type { Device, LegacyWorkoutRecordV1, LocalDataSnapshot } from "../../../types";
 import type { SyncContext } from "../syncTypes";
 import {
   deviceFromRow,
@@ -6,7 +7,6 @@ import {
   fitnessSummaryProjectionV2FromRow,
   knowledgeDocumentFromRow,
   knowledgeDocumentToRow,
-  mealRecordFromRow,
   noteFromRow,
   noteToRow,
   projectActionFromRow,
@@ -40,7 +40,6 @@ import type {
   DeviceRow,
   FitnessSummaryProjectionV2Row,
   KnowledgeDocumentRow,
-  MealRecordRow,
   NoteRow,
   ProjectActionRow,
   ProjectHistoryRow,
@@ -59,6 +58,7 @@ import type {
   WorkstreamProjectRow,
   WorkstreamRow,
 } from "./rows";
+import type { FitnessReadModelDiagnostics, FitnessReadModelName } from "../syncTypes";
 import {
   mergeAuthoritativeSnapshot,
   mergeSnapshot,
@@ -74,6 +74,7 @@ export interface SnapshotWriteResult {
 }
 
 export interface SnapshotTransport {
+  fitnessReadModels?: FitnessReadModelDiagnostics;
   selectRows<Row>(
     tableName: SnapshotTableName,
     userId: string,
@@ -152,17 +153,128 @@ function throwQueryError(result: { error: unknown | null }): void {
   }
 }
 
+function errorFields(error: unknown): Record<string, unknown> {
+  if (!error || typeof error !== "object") {
+    return { message: String(error ?? "알 수 없는 오류") };
+  }
+  return error as Record<string, unknown>;
+}
+
+function fitnessQueryErrorDetail(
+  source: FitnessReadModelName,
+  tableName: string,
+  error: unknown,
+): string {
+  const fields = errorFields(error);
+  const code = typeof fields.code === "string" ? fields.code : "";
+  const status = typeof fields.status === "number" ? fields.status : undefined;
+  const message = typeof fields.message === "string" ? fields.message : String(error);
+  const hint = typeof fields.hint === "string" ? fields.hint : "";
+  const details = typeof fields.details === "string" ? fields.details : "";
+  const serverDetail = [message, details, hint].filter(Boolean).join(" · ");
+  const suffix = [code && `code ${code}`, status && `HTTP ${status}`]
+    .filter(Boolean)
+    .join(", ");
+  const context = suffix ? ` (${suffix})` : "";
+
+  if (
+    source === "nutrition" &&
+    (code === "42P01" || code === "PGRST205" || status === 404 ||
+      /does not exist|could not find.*schema cache|not find the table/i.test(message))
+  ) {
+    return `${tableName} view를 현재 Supabase 프로젝트에서 찾지 못했습니다${context}. 프로젝트 URL/ref와 PostgREST schema cache를 확인하고 migration 20260922090000_fitness_nutrition_summary_v1.sql을 적용하세요. 서버 응답: ${serverDetail}`;
+  }
+
+  if (code === "42501" || status === 401 || status === 403) {
+    return `${tableName} 접근이 인증/권한/RLS에 의해 거부됐습니다${context}. 같은 Supabase 프로젝트의 로그인 계정과 authenticated SELECT 권한을 확인하세요. 서버 응답: ${serverDetail}`;
+  }
+
+  return `${tableName} read query 실패${context}. Supabase project URL/ref, 인증 및 RLS를 확인하세요. 서버 응답: ${serverDetail}`;
+}
+
+function fitnessReadModelStatus(
+  source: FitnessReadModelName,
+  tableName: string,
+  rows: unknown[] | null,
+  error: unknown | null,
+) {
+  if (error) {
+    return {
+      state: "error" as const,
+      detail: fitnessQueryErrorDetail(source, tableName, error),
+    };
+  }
+  return rows && rows.length > 0
+    ? { state: "connected" as const, detail: `${tableName}: ${rows.length}개 row` }
+    : { state: "empty" as const, detail: `${tableName}: row 없음` };
+}
+
+function fitnessWeightReadModelStatus(
+  rows: unknown[] | null,
+  error: unknown | null,
+) {
+  const status = fitnessReadModelStatus(
+    "weight",
+    "weight_records (Fitness-owned)",
+    rows,
+    error,
+  );
+
+  if (status.state === "error") {
+    return status;
+  }
+
+  const activeRowCount = (rows ?? []).filter(
+    (row) =>
+      typeof row === "object" &&
+      row !== null &&
+      "deletedAt" in row &&
+      row.deletedAt === null,
+  ).length;
+
+  return {
+    ...status,
+    detail: `${status.detail} · 삭제되지 않은 row ${activeRowCount}개`,
+  };
+}
+
+function isSharedLegacyWorkout(
+  record: LegacyWorkoutRecordV1,
+): boolean {
+  return record.sourceApp === "fitness" &&
+    record.scope === "both" &&
+    record.deletedAt === null &&
+    record.metadata?.status === "completed" &&
+    record.category.trim().length > 0;
+}
+
+function selectFitnessRows<Row>(
+  transport: SnapshotTransport,
+  tableName: SnapshotTableName,
+  userId: string,
+): Promise<SnapshotQueryResult<Row>> {
+  try {
+    return transport.selectRows<Row>(tableName, userId).catch((error: unknown) => ({
+      data: null,
+      error,
+    }));
+  } catch (error) {
+    return Promise.resolve({ data: null, error });
+  }
+}
+
 async function fetchIncomingSnapshot(
   transport: SnapshotTransport,
   userId: string,
+  localSnapshot: LocalDataSnapshot,
 ): Promise<LocalDataSnapshot> {
   const [
     notesResult,
     tasksResult,
-    workoutRecordsResult,
-    mealRecordsResult,
-    weightRecordsResult,
+    fitnessNutritionSummariesResult,
     fitnessSummaryProjectionsResult,
+    workoutRecordsResult,
+    weightRecordsResult,
     devicesResult,
     projectsResult,
     projectMilestonesResult,
@@ -179,13 +291,16 @@ async function fetchIncomingSnapshot(
   ] = await Promise.all([
     transport.selectRows<NoteRow>("notes", userId),
     transport.selectRows<TaskRow>("tasks", userId),
-    transport.selectRows<WorkoutRecordRow>("workout_records", userId),
-    transport.selectRows<MealRecordRow>("meal_records", userId),
-    transport.selectRows<WeightRecordRow>("weight_records", userId),
-    transport.selectRows<FitnessSummaryProjectionV2Row>(
+    selectFitnessRows<unknown>(transport, "fitness_nutrition_summary_v1", userId),
+    selectFitnessRows<FitnessSummaryProjectionV2Row>(
+      transport,
       "fitness_summary_projections_v2",
       userId,
     ),
+    // Read-only v1 compatibility; v2 stays authoritative for each session.
+    selectFitnessRows<WorkoutRecordRow>(transport, "workout_records", userId),
+    // Compatibility read path only; weight_records never enter a push payload.
+    selectFitnessRows<WeightRecordRow>(transport, "weight_records", userId),
     transport.selectRows<DeviceRow>("devices", userId),
     transport.selectRows<ProjectRow>("projects", userId),
     transport.selectRows<ProjectMilestoneRow>("project_milestones", userId),
@@ -213,13 +328,55 @@ async function fetchIncomingSnapshot(
     transport.selectRows<KnowledgeDocumentRow>("knowledge_documents", userId),
   ]);
 
+  const sharedLegacyWorkouts = (
+    workoutRecordsResult.error
+      ? localSnapshot.fitnessSharedWorkoutRecords ?? []
+      : (workoutRecordsResult.data ?? []).map(workoutRecordFromRow)
+  ).filter(isSharedLegacyWorkout);
+
+  const fitnessWeightRecords = weightRecordsResult.error
+    ? localSnapshot.fitnessWeightRecords ?? []
+    : (weightRecordsResult.data ?? [])
+        .map(weightRecordFromRow)
+        .filter((record) => record.sourceApp === "fitness" && (record.scope === "fitness" || record.scope === "both"));
+
+  transport.fitnessReadModels = {
+    workout: fitnessSummaryProjectionsResult.error
+      ? fitnessReadModelStatus(
+          "workout",
+          "fitness_summary_projections_v2",
+          fitnessSummaryProjectionsResult.data,
+          fitnessSummaryProjectionsResult.error,
+        )
+      : fitnessSummaryProjectionsResult.data?.length
+        ? fitnessReadModelStatus(
+            "workout",
+            "fitness_summary_projections_v2",
+            fitnessSummaryProjectionsResult.data,
+            null,
+          )
+        : fitnessReadModelStatus(
+            "workout",
+            "workout_records (Fitness 공유 v1)",
+            workoutRecordsResult.error ? null : sharedLegacyWorkouts,
+            workoutRecordsResult.error,
+          ),
+    nutrition: fitnessReadModelStatus(
+      "nutrition",
+      "fitness_nutrition_summary_v1",
+      fitnessNutritionSummariesResult.data,
+      fitnessNutritionSummariesResult.error,
+    ),
+    weight: fitnessWeightReadModelStatus(
+      weightRecordsResult.error ? null : fitnessWeightRecords,
+      weightRecordsResult.error,
+    ),
+  };
+
+  // Keep the established fail-fast policy for core Personal OS tables.
   for (const result of [
     notesResult,
     tasksResult,
-    workoutRecordsResult,
-    mealRecordsResult,
-    weightRecordsResult,
-    fitnessSummaryProjectionsResult,
     devicesResult,
     projectsResult,
     projectMilestonesResult,
@@ -240,14 +397,20 @@ async function fetchIncomingSnapshot(
   const incomingSnapshot: LocalDataSnapshot = {
     notes: (notesResult.data ?? []).map(noteFromRow),
     tasks: (tasksResult.data ?? []).map(taskFromRow),
-    workoutRecords: (workoutRecordsResult.data ?? []).map(
-      workoutRecordFromRow,
-    ),
-    mealRecords: (mealRecordsResult.data ?? []).map(mealRecordFromRow),
-    weightRecords: (weightRecordsResult.data ?? []).map(weightRecordFromRow),
-    fitnessSummaryProjections: (fitnessSummaryProjectionsResult.data ?? []).map(
-      fitnessSummaryProjectionV2FromRow,
-    ),
+    // Preserve the local v1 archive; this full read-only owner view is separate.
+    workoutRecords: [],
+    fitnessSharedWorkoutRecords: sharedLegacyWorkouts,
+    mealRecords: [],
+    weightRecords: [],
+    fitnessWeightRecords,
+    fitnessNutritionSummaries: fitnessNutritionSummariesResult.error
+      ? localSnapshot.fitnessNutritionSummaries ?? []
+      : (fitnessNutritionSummariesResult.data ?? []).map(fitnessNutritionSummaryFromRow),
+    fitnessSummaryProjections: fitnessSummaryProjectionsResult.error
+      ? localSnapshot.fitnessSummaryProjections
+      : (fitnessSummaryProjectionsResult.data ?? []).map(
+          fitnessSummaryProjectionV2FromRow,
+        ),
     devices: (devicesResult.data ?? []).map(deviceFromRow),
     projects: (projectsResult.data ?? []).map(projectFromRow),
     projectMilestones: (projectMilestonesResult.data ?? []).map(
@@ -285,7 +448,7 @@ export async function pullSnapshot(
   localSnapshot: LocalDataSnapshot,
   userId: string,
 ): Promise<LocalDataSnapshot> {
-  const incomingSnapshot = await fetchIncomingSnapshot(transport, userId);
+  const incomingSnapshot = await fetchIncomingSnapshot(transport, userId, localSnapshot);
   return mergeSnapshot(localSnapshot, incomingSnapshot);
 }
 
@@ -294,7 +457,7 @@ export async function pullSnapshotAuthoritative(
   localSnapshot: LocalDataSnapshot,
   userId: string,
 ): Promise<LocalDataSnapshot> {
-  const incomingSnapshot = await fetchIncomingSnapshot(transport, userId);
+  const incomingSnapshot = await fetchIncomingSnapshot(transport, userId, localSnapshot);
   return mergeAuthoritativeSnapshot(localSnapshot, incomingSnapshot);
 }
 

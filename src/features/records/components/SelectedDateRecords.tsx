@@ -6,7 +6,8 @@ import {
   Scale,
   StickyNote,
 } from "lucide-react";
-import type { FitnessSummaryProjectionV2, MealRecord, WeightRecord } from "../../../types";
+import type { MealRecord, WeightRecord } from "../../../types";
+import { formatSharedWorkoutLabels, type SharedWorkoutSummary } from "../../fitness-summary/sharedWorkoutSummaries";
 import {
   BACKFILL_LABEL,
   hasBackfillMetadata,
@@ -14,7 +15,6 @@ import {
   isPastLocalDate,
 } from "../../../lib/dataTrust/backfillMetadata";
 import { formatKoreanDate } from "../../fitness/fitnessDate";
-import { formatFitnessProjectionLabels } from "../../fitness-summary/fitnessSummary";
 import { formatMetric } from "../../fitness/stats/fitnessStats";
 import { getPlainTextFromNoteContent } from "../../notes/noteService";
 import type { DateRecords } from "../recordAggregation";
@@ -48,11 +48,11 @@ function BackfillBadge({ record }: { record: { isBackfilled?: boolean } }) {
 function WorkoutProjectionDetail({
   projection,
 }: {
-  projection: FitnessSummaryProjectionV2;
+  projection: SharedWorkoutSummary;
 }) {
   return (
     <div className="mt-1 text-xs text-slate-500 dark:text-neutral-400">
-      {formatFitnessProjectionLabels(projection).join(" · ")}
+      {formatSharedWorkoutLabels(projection).join(" · ")}
     </div>
   );
 }
@@ -222,7 +222,7 @@ export function SelectedDateRecords({
           {records.workoutRecords.map((record) => (
             <DailyItem key={record.id} markerClassName="bg-red-500">
               <div className="truncate text-sm font-semibold text-slate-900 dark:text-neutral-100">
-                Fitness 운동 요약
+                Fitness 운동
               </div>
               <WorkoutProjectionDetail projection={record} />
               <BackfillBadge record={record} />

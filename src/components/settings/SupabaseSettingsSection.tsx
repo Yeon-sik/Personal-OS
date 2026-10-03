@@ -136,6 +136,36 @@ export function SupabaseSettingsSection({
           {getSyncStatusDescription(syncStatus)}
         </p>
 
+        <p className="mt-2 whitespace-pre-wrap break-words text-[11px] text-slate-500 dark:text-neutral-400">
+          {syncStatus.detail}
+        </p>
+
+        {syncStatus.fitnessReadModels && (
+          <div
+            className="mt-3 rounded border border-slate-200 bg-white p-2 text-[11px] dark:border-neutral-800 dark:bg-neutral-900"
+            aria-label="Fitness read-model diagnostics"
+          >
+            <p className="mb-1 font-semibold text-slate-700 dark:text-neutral-200">
+              Fitness read models
+            </p>
+            <dl className="space-y-1">
+              {(["workout", "nutrition", "weight"] as const).map((source) => {
+                const status = syncStatus.fitnessReadModels?.[source];
+                if (!status) return null;
+                return (
+                  <div key={source} className="grid grid-cols-[5rem_4rem_minmax(0,1fr)] gap-2">
+                    <dt>{source}</dt>
+                    <dd className={status.state === "error" ? "font-medium text-red-700 dark:text-red-300" : "font-medium"}>
+                      {status.state}
+                    </dd>
+                    <dd className="break-words">{status.detail}</dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </div>
+        )}
+
         <button
           type="button"
           onClick={() => void onManualSync()}

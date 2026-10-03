@@ -1,10 +1,4 @@
 import { useMemo, useState } from "react";
-
-import {
-  getVisibleMealRecords,
-  getVisibleWeightRecords,
-  getVisibleWorkoutRecords,
-} from "../features/fitness/fitnessService";
 import { getVisibleNotes } from "../features/notes/noteService";
 import { useNoteActions } from "../features/notes/useNoteActions";
 import { getVisibleTasks } from "../features/tasks/taskService";
@@ -40,18 +34,6 @@ export function useLocalSyncMemo(
     () => getVisibleTasks(runtime.snapshot.tasks),
     [runtime.snapshot.tasks],
   );
-  const visibleWorkoutRecords = useMemo(
-    () => getVisibleWorkoutRecords(runtime.snapshot.workoutRecords),
-    [runtime.snapshot.workoutRecords],
-  );
-  const visibleMealRecords = useMemo(
-    () => getVisibleMealRecords(runtime.snapshot.mealRecords),
-    [runtime.snapshot.mealRecords],
-  );
-  const visibleWeightRecords = useMemo(
-    () => getVisibleWeightRecords(runtime.snapshot.weightRecords),
-    [runtime.snapshot.weightRecords],
-  );
   const visibleProjects = useMemo(
     () => getVisibleProjects(runtime.snapshot.projects),
     [runtime.snapshot.projects],
@@ -77,7 +59,7 @@ export function useLocalSyncMemo(
         .filter(
           (projection) =>
             projection.deletedAt === null &&
-            projection.completionStatus === "completed",
+            projection.completionStatus === "completed" && projection.contractVersion === 2,
         )
         .sort((first, second) => {
           if (first.date !== second.date) {
@@ -87,6 +69,19 @@ export function useLocalSyncMemo(
         }),
     [runtime.snapshot.fitnessSummaryProjections],
   );
+  const visibleFitnessSharedWorkoutRecords = useMemo(() => {
+    const projectedSessionIds = new Set(
+      runtime.snapshot.fitnessSummaryProjections.map(
+        (projection) => projection.sourceFitnessSessionId,
+      ),
+    );
+    return (runtime.snapshot.fitnessSharedWorkoutRecords ?? []).filter(
+      (record) => !projectedSessionIds.has(record.id),
+    );
+  }, [
+    runtime.snapshot.fitnessSharedWorkoutRecords,
+    runtime.snapshot.fitnessSummaryProjections,
+  ]);
   const selectedNote = useMemo(
     () =>
       visibleNotes.find((note) => note.id === runtime.selectedNoteId) ?? null,
@@ -139,6 +134,9 @@ export function useLocalSyncMemo(
     projects: visibleProjects,
     error: runtime.error,
     fitnessSummaryProjections: visibleFitnessSummaryProjections,
+    fitnessSharedWorkoutRecords: visibleFitnessSharedWorkoutRecords,
+    fitnessNutritionSummaries: runtime.snapshot.fitnessNutritionSummaries,
+    fitnessWeightRecords: runtime.snapshot.fitnessWeightRecords ?? [],
     isAuthenticated: runtime.isAuthenticated,
     isManualSyncing: runtime.isManualSyncing,
     isReady: runtime.isReady,
@@ -147,7 +145,8 @@ export function useLocalSyncMemo(
     knowledgeVault,
     loadFinanceDailySummaries: runtime.loadFinanceDailySummaries,
     manualSync: runtime.manualSync,
-    mealRecords: visibleMealRecords,
+    // Legacy source records remain available for archive compatibility only.
+    mealRecords: runtime.snapshot.mealRecords,
     notes: visibleNotes,
     saveState: runtime.saveState,
     saveSupabaseConfig: runtime.saveSupabaseConfig,
@@ -164,8 +163,10 @@ export function useLocalSyncMemo(
     syncStatus: runtime.syncStatus,
     tasks: visibleTasks,
     userId: runtime.userId,
-    weightRecords: visibleWeightRecords,
-    workoutRecords: visibleWorkoutRecords,
+    // Legacy archive; RecordsOverview gates weight display on a successful pull.
+    weightRecords: runtime.snapshot.weightRecords,
+    // Legacy archive only; live workouts come from v2 projections.
+    workoutRecords: runtime.snapshot.workoutRecords,
     ...devControlActions,
   };
 }

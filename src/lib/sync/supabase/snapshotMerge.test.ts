@@ -12,6 +12,24 @@ import {
 } from "./testFixtures";
 
 describe("Supabase snapshot merge", () => {
+  it("removes a prior nutrition date when the full v1 projection no longer returns it", () => {
+    const deletedDateSummary = {
+      id: "2026-08-01",
+      date: "2026-08-01",
+      contractVersion: 1 as const,
+      mealCount: 1,
+      calories: 500,
+      carbsGrams: 40,
+      proteinGrams: 30,
+      fatGrams: 10,
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    };
+    const local = makeSnapshot({ fitnessNutritionSummaries: [deletedDateSummary] });
+    const afterFullPull = makeSnapshot({ fitnessNutritionSummaries: [] });
+
+    expect(mergeSnapshot(local, afterFullPull).fitnessNutritionSummaries).toEqual([]);
+    expect(mergeAuthoritativeSnapshot(local, afterFullPull).fitnessNutritionSummaries).toEqual([]);
+  });
   it("uses the canonical LWW rule for each snapshot collection", () => {
     const local = makeSnapshot({
       notes: [

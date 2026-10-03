@@ -1,5 +1,4 @@
 import type {
-  FitnessSummaryProjectionV2,
   MealRecord,
   WeightRecord,
 } from "../../../types";
@@ -8,11 +7,11 @@ import {
   hasBackfillMetadata,
 } from "../../../lib/dataTrust/backfillMetadata";
 import { formatKoreanDate, isWithinDateRange } from "../fitnessDate";
-import { formatFitnessProjectionLabels } from "../../fitness-summary/fitnessSummary";
+import { formatSharedWorkoutLabels, type SharedWorkoutSummary } from "../../fitness-summary/sharedWorkoutSummaries";
 import { calculateFitnessStats, formatMetric } from "../stats/fitnessStats";
 
 interface FitnessExportInput {
-  workoutRecords: FitnessSummaryProjectionV2[];
+  workoutRecords: SharedWorkoutSummary[];
   mealRecords: MealRecord[];
   weightRecords: WeightRecord[];
   startDate: string;
@@ -135,7 +134,7 @@ export function createFitnessMarkdownExport({
     "운동",
     rangedWorkouts,
     (record) =>
-      `- ${formatFitnessProjectionLabels(record).join(" · ")}${formatBackfillSuffix(record)}`,
+      `- ${formatSharedWorkoutLabels(record).join(" · ")}${formatBackfillSuffix(record)}`,
   );
   appendEmptyAwareSection(
     lines,

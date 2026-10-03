@@ -16,6 +16,7 @@ interface FakeClientOptions {
   userId?: string | null;
   sessionError?: Error | null;
   selectError?: Error | null;
+  selectErrorsByTable?: Partial<Record<SnapshotTableName, unknown>>;
   rowsByTable?: Partial<Record<SnapshotTableName, unknown[]>>;
   upsertErrorsByTable?: Partial<Record<SnapshotTableName, Error>>;
 }
@@ -24,6 +25,7 @@ function createFakeClient({
   userId = null,
   sessionError = null,
   selectError = null,
+  selectErrorsByTable = {},
   rowsByTable = {},
   upsertErrorsByTable = {},
 }: FakeClientOptions = {}) {
@@ -32,7 +34,7 @@ function createFakeClient({
       order: vi.fn(() => ({
         range: vi.fn(async (from: number, to: number) => ({
           data: (rowsByTable[tableName] ?? []).slice(from, to + 1),
-          error: selectError,
+          error: selectErrorsByTable[tableName] ?? selectError,
         })),
       })),
     })),
@@ -144,6 +146,41 @@ describe("SupabaseSyncClient facade", () => {
     expect(client.getStatus()).toMatchObject({
       mode: "error",
       detail: "RLS denied",
+    });
+  });
+
+  it("reports source-specific partial Fitness failures while core sync succeeds", async () => {
+    const fake = createFakeClient({
+      userId: "user-1",
+      selectErrorsByTable: {
+        fitness_nutrition_summary_v1: {
+          code: "PGRST205",
+          status: 404,
+          message: "Could not find the table 'public.fitness_nutrition_summary_v1' in the schema cache",
+        },
+      },
+    });
+    const client = createConfiguredClient(fake.client, () => true);
+
+    const result = await client.pull(makeSnapshot(), {
+      userId: "user-1",
+      device: makeDevice(),
+    });
+
+    expect(result.notes).toEqual([]);
+    expect(result.tasks).toEqual([]);
+    expect(result.fitnessSummaryProjections).toEqual([]);
+    expect(client.getStatus()).toMatchObject({
+      mode: "synced",
+      fitnessReadModels: {
+        workout: { state: "empty" },
+        nutrition: {
+          state: "error",
+          detail: expect.stringContaining("20260922090000_fitness_nutrition_summary_v1.sql"),
+        },
+        weight: { state: "empty" },
+      },
+      detail: expect.stringContaining("Fitness read model 부분 실패"),
     });
   });
 

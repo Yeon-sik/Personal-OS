@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { makeWorkoutRecord } from "../../lib/sync/supabase/testFixtures";
 import type {
   FitnessSummaryProjectionV2,
   LocalDataSnapshot,
@@ -12,6 +13,7 @@ import {
   getNutritionSeries,
   getProductivitySeries,
   getRecordsForDate,
+  getWeightRecordsForDisplay,
 } from "./recordAggregation";
 
 const liveWorkout: FitnessSummaryProjectionV2 = {
@@ -168,6 +170,38 @@ describe("recordAggregation", () => {
     expect(markers["2026-06-09"]?.workouts).toBe(true);
   });
 
+  it("marks and lists only completed shared Fitness v1 workouts", () => {
+    const shared = makeWorkoutRecord({
+      id: "legacy-legs",
+      date: "2026-06-09",
+      sourceApp: "fitness",
+      scope: "both",
+      category: "하체",
+      metadata: { status: "completed" },
+    });
+    const inProgress = makeWorkoutRecord({
+      ...shared,
+      id: "in-progress",
+      scope: "fitness",
+      metadata: { status: "in_progress" },
+    });
+    const removed = makeWorkoutRecord({
+      ...shared,
+      id: "removed",
+      deletedAt: "2026-06-10T00:00:00.000Z",
+    });
+    const legacySnapshot = {
+      ...snapshot,
+      fitnessSharedWorkoutRecords: [shared, inProgress, removed],
+      fitnessSummaryProjections: [],
+    };
+
+    expect(getRecordsForDate(legacySnapshot, "2026-06-09").workoutRecords)
+      .toEqual([shared]);
+    expect(getCalendarMarkers(legacySnapshot, "2026-06-09")["2026-06-09"]?.workouts)
+      .toBe(true);
+  });
+
   it("excludes tombstones from dashboard stats", () => {
     const stats = getDashboardStats(snapshot, {
       startDate: "2026-06-01",
@@ -239,6 +273,26 @@ describe("recordAggregation", () => {
     expect(series[0].averageProteinGrams).toBe(40);
   });
 
+  it("keeps Fitness meal details out of OS date records even when the legacy scope is both", () => {
+    const fitnessMeal = {
+      ...liveMeal,
+      sourceApp: "fitness" as const,
+      scope: "both" as const,
+      menu: "private Fitness meal detail",
+    };
+    const records = getRecordsForDate(
+      { ...snapshot, mealRecords: [fitnessMeal] },
+      "2026-06-09",
+    );
+
+    expect(records.mealRecords).toEqual([]);
+  });
+
+  it("does not present cached weights as current until a remote pull succeeds", () => {
+    expect(getWeightRecordsForDisplay([liveWeight], { mode: "offline" })).toEqual([]);
+    expect(getWeightRecordsForDisplay([liveWeight], { mode: "error" })).toEqual([]);
+    expect(getWeightRecordsForDisplay([liveWeight], { mode: "synced" })).toEqual([liveWeight]);
+  });
   it("does not create markers for tombstone-only dates", () => {
     const markers = getCalendarMarkers(
       {

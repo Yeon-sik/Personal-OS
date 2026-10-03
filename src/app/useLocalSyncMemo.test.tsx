@@ -21,6 +21,7 @@ import type {
 } from "../types";
 import { getOrCreateDevice } from "../lib/device/device";
 import { getAutostartEnabled } from "../lib/desktop/autostart";
+import { makeMealRecord, makeWeightRecord, makeWorkoutRecord } from "../lib/sync/supabase/testFixtures";
 import { useLocalSyncMemo } from "./useLocalSyncMemo";
 
 vi.mock("../lib/device/device", async () => {
@@ -675,6 +676,23 @@ describe("useLocalSyncMemo", () => {
     expect(syncClient.activeDeviceCalls.length).toBeGreaterThan(initialCalls);
   });
 
+  it("keeps legacy Fitness records available as local archive compatibility data", async () => {
+    const archivedWorkout = makeWorkoutRecord();
+    const archivedMeal = makeMealRecord();
+    const archivedWeight = makeWeightRecord();
+    const storage = new MemoryStorage({
+      ...createEmptySnapshot(),
+      workoutRecords: [archivedWorkout],
+      mealRecords: [archivedMeal],
+      weightRecords: [archivedWeight],
+    });
+
+    await renderHook(storage, new FakeSyncClient());
+
+    expect(currentHook.workoutRecords).toEqual([archivedWorkout]);
+    expect(currentHook.mealRecords).toEqual([archivedMeal]);
+    expect(currentHook.weightRecords).toEqual([archivedWeight]);
+  });
   it("exposes Fitness projections as read-only data without canonical write actions", async () => {
     const projection: FitnessSummaryProjectionV2 = {
       id: "fitness-session-1",

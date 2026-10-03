@@ -323,6 +323,7 @@ export function makeSnapshot(
     tasks: [],
     workoutRecords: [],
     fitnessSummaryProjections: [],
+    fitnessWeightRecords: [],
     mealRecords: [],
     weightRecords: [],
     devices: [],

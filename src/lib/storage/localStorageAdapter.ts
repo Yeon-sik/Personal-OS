@@ -1,3 +1,4 @@
+import { parseFitnessNutritionSummary } from "../../features/fitness-summary/fitnessNutritionContract";
 import type {
   Device,
   LocalDataSnapshot,
@@ -608,10 +609,15 @@ function normalizeSnapshot(value: unknown): LocalDataSnapshot {
     value.workoutRecords,
     normalizeWorkoutRecord,
   );
+  const fitnessSharedWorkoutRecords = normalizeArray(
+    value.fitnessSharedWorkoutRecords,
+    normalizeWorkoutRecord,
+  );
   const fitnessSummaryProjections = normalizeArray(
     value.fitnessSummaryProjections,
     normalizeFitnessSummaryProjection,
   );
+  const fitnessWeightRecords = normalizeArray(value.fitnessWeightRecords, normalizeWeightRecord);
   const mealRecords = normalizeArray(value.mealRecords, normalizeMealRecord);
   const weightRecords = normalizeArray(
     value.weightRecords,
@@ -658,7 +664,14 @@ function normalizeSnapshot(value: unknown): LocalDataSnapshot {
     notes,
     tasks,
     workoutRecords,
+    fitnessSharedWorkoutRecords,
     fitnessSummaryProjections,
+    fitnessNutritionSummaries: Array.isArray(value.fitnessNutritionSummaries)
+      ? normalizeArray(value.fitnessNutritionSummaries, (row) => {
+          try { return parseFitnessNutritionSummary(row); } catch { return null; }
+        })
+      : undefined,
+    fitnessWeightRecords,
     mealRecords,
     weightRecords,
     devices,
