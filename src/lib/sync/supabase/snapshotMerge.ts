@@ -46,6 +46,7 @@ export function mergeSnapshot(
   incomingSnapshot: LocalDataSnapshot,
 ): LocalDataSnapshot {
   return {
+    syncState: localSnapshot.syncState,
     // Removed/moved meal dates disappear from the view without a tombstone.
     fitnessNutritionSummaries: incomingSnapshot.fitnessNutritionSummaries ?? localSnapshot.fitnessNutritionSummaries,
     // Full pull replaces this source-owned collection; local legacy archives stay untouched.
@@ -123,6 +124,7 @@ export function mergeAuthoritativeSnapshot(
   incomingSnapshot: LocalDataSnapshot,
 ): LocalDataSnapshot {
   return {
+    syncState: localSnapshot.syncState,
     // Removed/moved meal dates disappear from the view without a tombstone.
     fitnessNutritionSummaries: incomingSnapshot.fitnessNutritionSummaries ?? localSnapshot.fitnessNutritionSummaries,
     // Full pull replaces this source-owned collection; local legacy archives stay untouched.

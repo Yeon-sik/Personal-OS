@@ -1,4 +1,5 @@
 import type { FitnessNutritionSummaryV1 } from "../features/fitness-summary/fitnessNutritionContract";
+import type { LocalSyncState } from "../lib/sync/syncState";
 
 export type EntityId = string;
 export type ISODateString = string;
@@ -216,6 +217,8 @@ export interface Device {
 }
 
 export interface LocalDataSnapshot {
+  /** Rows, dirty revisions and pull cursor are persisted in one local envelope. */
+  syncState?: LocalSyncState;
   notes: Note[];
   tasks: Task[];
   /** Frozen v1 source rows retained only as a local compatibility archive. */

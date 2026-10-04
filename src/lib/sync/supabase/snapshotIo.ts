@@ -1,6 +1,7 @@
 import { fitnessNutritionSummaryFromRow } from "../../../features/fitness-summary/fitnessNutritionContract";
 import type { Device, LegacyWorkoutRecordV1, LocalDataSnapshot } from "../../../types";
 import type { SyncContext } from "../syncTypes";
+import { WRITE_COLLECTIONS } from "../syncState";
 import {
   deviceFromRow,
   deviceToRow,
@@ -75,9 +76,11 @@ export interface SnapshotWriteResult {
 
 export interface SnapshotTransport {
   fitnessReadModels?: FitnessReadModelDiagnostics;
+  fullPullSourceFailed?: boolean;
   selectRows<Row>(
     tableName: SnapshotTableName,
     userId: string,
+    options?: { ids?: string[]; dates?: string[] },
   ): Promise<SnapshotQueryResult<Row>>;
   upsertRows<Row>(
     tableName: SnapshotTableName,
@@ -112,16 +115,20 @@ export function createSupabaseSnapshotTransport(
   supabase: SupabaseClient,
 ): SnapshotTransport {
   return {
-    async selectRows<Row>(tableName: SnapshotTableName, userId: string) {
+    async selectRows<Row>(tableName: SnapshotTableName, userId: string, options?: { ids?: string[]; dates?: string[] }) {
       const table = supabase.from(tableName) as unknown as SelectTable<Row>;
       const rows: Row[] = [];
 
       for (let pageIndex = 0; ; pageIndex += 1) {
         const pageStart = pageIndex * SNAPSHOT_PAGE_SIZE;
-        const pageResult = await table
+        let query = table
           .select("*")
-          .eq("user_id", userId)
-          .order("id", { ascending: true })
+          .eq("user_id", userId);
+        if (options?.ids || options?.dates) {
+          query = (query as typeof query & { in(column: string, values: string[]): typeof query })
+            .in(options.ids ? "id" : "date", options.ids ?? options.dates!);
+        }
+        const pageResult = await query.order("id", { ascending: true })
           .range(pageStart, pageStart + SNAPSHOT_PAGE_SIZE - 1);
 
         if (pageResult.error) {
@@ -192,7 +199,7 @@ function fitnessQueryErrorDetail(
   return `${tableName} read query 실패${context}. Supabase project URL/ref, 인증 및 RLS를 확인하세요. 서버 응답: ${serverDetail}`;
 }
 
-function fitnessReadModelStatus(
+export function fitnessReadModelStatus(
   source: FitnessReadModelName,
   tableName: string,
   rows: unknown[] | null,
@@ -327,6 +334,9 @@ async function fetchIncomingSnapshot(
     ),
     transport.selectRows<KnowledgeDocumentRow>("knowledge_documents", userId),
   ]);
+
+  transport.fullPullSourceFailed = [fitnessNutritionSummariesResult, fitnessSummaryProjectionsResult,
+    workoutRecordsResult, weightRecordsResult].some((result) => Boolean(result.error));
 
   const sharedLegacyWorkouts = (
     workoutRecordsResult.error
@@ -485,6 +495,16 @@ export function createPushPayload(
   context: SyncContext,
   lastSeenAt: string,
 ): PushPayload {
+  if (localSnapshot.syncState) {
+    const dirty = new Set(localSnapshot.syncState.pending.map((item) => `${item.collection}:${item.id}`));
+    localSnapshot = {
+      ...localSnapshot,
+      ...Object.fromEntries(WRITE_COLLECTIONS.map(([collection]) => [
+        collection,
+        localSnapshot[collection].filter((row) => dirty.has(`${collection}:${row.id}`)),
+      ])),
+    };
+  }
   const currentDevice: Device = {
     ...context.device,
     lastSeenAt,
@@ -549,6 +569,35 @@ export function createPushPayload(
 export interface PushSnapshotResult {
   changedRows: number;
   currentDevice: Device;
+}
+
+export function pushBatches(payload: PushPayload) {
+  return WRITE_COLLECTIONS.map(([collection, tableName]) => ({ collection, tableName, rows: payload[collection] }));
+}
+
+/** Maps only the requested table, for delta pulls and ID-scoped confirmation. */
+export function mapTableRows(table: SnapshotTableName, rows: unknown[]): Partial<LocalDataSnapshot> {
+  switch (table) {
+    case "notes": return { notes: (rows as NoteRow[]).map(noteFromRow) };
+    case "tasks": return { tasks: (rows as TaskRow[]).map(taskFromRow) };
+    case "projects": return { projects: (rows as ProjectRow[]).map(projectFromRow) };
+    case "project_milestones": return { projectMilestones: (rows as ProjectMilestoneRow[]).map(projectMilestoneFromRow) };
+    case "project_actions": return { projectActions: (rows as ProjectActionRow[]).map(projectActionFromRow) };
+    case "project_ideas": return { projectIdeas: (rows as ProjectIdeaRow[]).map(projectIdeaFromRow) };
+    case "project_history": return { projectHistory: (rows as ProjectHistoryRow[]).map(projectHistoryFromRow) };
+    case "workstreams": return { workstreams: (rows as WorkstreamRow[]).map(workstreamFromRow) };
+    case "workstream_projects": return { workstreamProjects: (rows as WorkstreamProjectRow[]).map(workstreamProjectFromRow) };
+    case "workstream_milestones": return { workstreamMilestones: (rows as WorkstreamMilestoneRow[]).map(workstreamMilestoneFromRow) };
+    case "workstream_actions": return { workstreamActions: (rows as WorkstreamActionRow[]).map(workstreamActionFromRow) };
+    case "workstream_action_projects": return { workstreamActionProjects: (rows as WorkstreamActionProjectRow[]).map(workstreamActionProjectFromRow) };
+    case "workstream_action_dependencies": return { workstreamActionDependencies: (rows as WorkstreamActionDependencyRow[]).map(workstreamActionDependencyFromRow) };
+    case "knowledge_documents": return { knowledgeDocuments: (rows as KnowledgeDocumentRow[]).map(knowledgeDocumentFromRow) };
+    case "fitness_summary_projections_v2": return { fitnessSummaryProjections: (rows as FitnessSummaryProjectionV2Row[]).map(fitnessSummaryProjectionV2FromRow) };
+    case "weight_records": return { fitnessWeightRecords: (rows as WeightRecordRow[]).map(weightRecordFromRow) };
+    case "workout_records": return { fitnessSharedWorkoutRecords: (rows as WorkoutRecordRow[]).map(workoutRecordFromRow) };
+    case "fitness_nutrition_summary_v1": return { fitnessNutritionSummaries: rows.map(fitnessNutritionSummaryFromRow) };
+    default: throw new Error(`지원하지 않는 증분 조회 소스: ${table}`);
+  }
 }
 
 export async function pushSnapshot(

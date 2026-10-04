@@ -26,6 +26,7 @@ import type {
 import { normalizeEntityAuditFields } from "../dataTrust/backfillMetadata";
 import { normalizeProjectGitHubIdentity } from "../dataTrust/projectGitHubIdentity";
 import { createEmptySnapshot, type StorageAdapter } from "./storageAdapter";
+import { parseSyncState } from "../sync/syncState";
 
 const STORAGE_KEY = "localsyncmemo:snapshot:v1";
 
@@ -662,6 +663,7 @@ function normalizeSnapshot(value: unknown): LocalDataSnapshot {
 
   return {
     notes,
+    syncState: parseSyncState(value.syncState),
     tasks,
     workoutRecords,
     fitnessSharedWorkoutRecords,
