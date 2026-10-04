@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Device, LocalDataSnapshot } from "../../types";
-import { mergeDevices } from "./merge";
+import { initializeSyncState } from "./syncState";
+import { reconcilePush } from "./syncReconciliation";
+import { createChangeFeedTransport, pullSnapshotChanges, type ChangeFeedTransport } from "./supabase/changeFeed";
+import { pushSnapshotChanges } from "./supabase/deltaPush";
 import {
   createSupabaseFinanceSummaryTransport,
   fetchFinanceDailySummaries,
@@ -23,9 +26,6 @@ import {
 import type { Database, SupabaseClient } from "./supabase/rows";
 import {
   createSupabaseSnapshotTransport,
-  pullSnapshot,
-  pullSnapshotAuthoritative,
-  pushSnapshot,
   type SnapshotTransport,
 } from "./supabase/snapshotIo";
 import type {
@@ -164,6 +164,8 @@ function noOpSubscription(): RealtimeSubscription {
 // Public facade: auth and sync status stay here; transport-specific work lives
 // under ./supabase so it can be tested without a live project.
 export class SupabaseSyncClient implements SyncClient {
+  private readonly backend: string;
+  private readonly changeFeed: ChangeFeedTransport | undefined;
   private readonly supabase: SupabaseClient | null;
   private readonly snapshotTransport: SnapshotTransport | null;
   private readonly realtimeTransport: RealtimeTransport | null;
@@ -184,6 +186,7 @@ export class SupabaseSyncClient implements SyncClient {
     this.now = dependencies.now ?? (() => new Date());
 
     const normalizedSupabaseUrl = supabaseUrl?.trim() ?? "";
+    this.backend = normalizedSupabaseUrl.replace(/\/+$/, "");
     const normalizedSupabaseAnonKey = supabaseAnonKey?.trim() ?? "";
 
     if (normalizedSupabaseUrl && normalizedSupabaseAnonKey) {
@@ -203,6 +206,7 @@ export class SupabaseSyncClient implements SyncClient {
     this.snapshotTransport = this.supabase
       ? createSupabaseSnapshotTransport(this.supabase)
       : null;
+    this.changeFeed = this.supabase ? createChangeFeedTransport(this.supabase) : undefined;
     this.realtimeTransport = this.supabase
       ? createSupabaseRealtimeTransport(this.supabase)
       : null;
@@ -258,6 +262,8 @@ export class SupabaseSyncClient implements SyncClient {
   isConfigured(): boolean {
     return Boolean(this.supabase);
   }
+
+  getBackend(): string { return this.backend; }
 
   async getAuthState(): Promise<AuthState> {
     if (!this.supabase) {
@@ -365,8 +371,9 @@ export class SupabaseSyncClient implements SyncClient {
   async pull(
     localSnapshot: LocalDataSnapshot,
     context: SyncContext,
+    options?: { full?: boolean },
   ): Promise<LocalDataSnapshot> {
-    return this.syncPull(localSnapshot, context);
+    return this.syncPull(localSnapshot, context, options);
   }
 
   async push(
@@ -379,6 +386,7 @@ export class SupabaseSyncClient implements SyncClient {
   async syncPull(
     localSnapshot: LocalDataSnapshot,
     context: SyncContext,
+    options?: { full?: boolean },
   ): Promise<LocalDataSnapshot> {
     const transport = this.snapshotTransport;
     if (!transport) {
@@ -411,21 +419,25 @@ export class SupabaseSyncClient implements SyncClient {
     );
 
     try {
-      const mergedSnapshot = await pullSnapshot(
+      if (context.backend && context.backend !== this.backend) throw new Error("동기화 서버가 로컬 대기열과 다릅니다.");
+      const prepared = initializeSyncState(localSnapshot, { backend: this.backend, userId: context.userId }, context.device.id);
+      const result = await pullSnapshotChanges(
         transport,
-        localSnapshot,
+        this.changeFeed,
+        prepared,
         context.userId,
+        options?.full,
       );
       this.fitnessReadModels = transport.fitnessReadModels;
       this.status = this.toConfiguredStatus(
         "synced",
         getFitnessPartialDetail(
-          "Supabase에서 최신 데이터를 가져왔습니다.",
+          result.fallback ? "Supabase에서 전체 복구 조회했습니다. 증분 조회에는 20261005090000 migration이 필요합니다." : "Supabase에서 최신 변경사항을 가져왔습니다.",
           this.fitnessReadModels,
         ),
         this.nowIso(),
       );
-      return mergedSnapshot;
+      return result.snapshot;
     } catch (caughtError) {
       this.fitnessReadModels = transport.fitnessReadModels ?? this.fitnessReadModels;
       this.status = this.toConfiguredStatus(
@@ -472,39 +484,43 @@ export class SupabaseSyncClient implements SyncClient {
     );
 
     try {
-      const result = await pushSnapshot(
+      if (context.backend && context.backend !== this.backend) throw new Error("동기화 서버가 로컬 대기열과 다릅니다.");
+      const prepared = initializeSyncState(localSnapshot, { backend: this.backend, userId: context.userId }, context.device.id);
+      const result = await pushSnapshotChanges(
         transport,
-        localSnapshot,
+        prepared,
         context,
         this.nowIso(),
       );
-      // PostgREST can report a stale LWW upsert as successful because the
-      // trigger returns NULL for the rejected UPDATE. Pull the remote rows
-      // again so the caller receives the server-authoritative merge result.
-      const reconciledSnapshot = await pullSnapshotAuthoritative(
-        transport,
-        localSnapshot,
-        context.userId,
-      );
-      this.fitnessReadModels = transport.fitnessReadModels;
+      let received: SyncResult["received"];
+      // Keep the existing post-write refresh timing without a full scan on
+      // every edit. Before the migration, ID confirmation alone remains safe.
+      if (!result.error && result.acknowledged.length && prepared.syncState?.cursor && this.changeFeed) {
+        const base = reconcilePush(prepared, result.snapshot, result.acknowledged);
+        try {
+          const pulled = await pullSnapshotChanges(transport, this.changeFeed, base, context.userId);
+          received = { base, snapshot: pulled.snapshot };
+          this.fitnessReadModels = transport.fitnessReadModels;
+        } catch (caughtError) {
+          // A read failure does not undo earlier write confirmations.
+          result.error = caughtError;
+        }
+      }
       this.status = this.toConfiguredStatus(
-        "synced",
+        result.error ? "error" : "synced",
         getFitnessPartialDetail(
-          "Supabase에 저장하고 서버 확정값을 반영했습니다.",
+          result.error ? toErrorMessage(result.error) : "변경 행을 저장하고 서버 확정값을 확인했습니다.",
           this.fitnessReadModels,
         ),
-        this.nowIso(),
+        result.error ? this.status.lastSyncedAt : this.nowIso(),
       );
 
       return {
         status: this.status,
         changedRows: result.changedRows,
-        snapshot: {
-          ...reconciledSnapshot,
-          devices: mergeDevices(reconciledSnapshot.devices, [
-            result.currentDevice,
-          ]),
-        },
+        snapshot: result.snapshot,
+        acknowledged: result.acknowledged,
+        received,
       };
     } catch (caughtError) {
       this.fitnessReadModels = transport.fitnessReadModels ?? this.fitnessReadModels;

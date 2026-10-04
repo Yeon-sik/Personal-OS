@@ -1,4 +1,5 @@
 import type { Device, LocalDataSnapshot } from "../../types";
+import type { PendingRevision } from "./syncState";
 
 // 헤더와 설정 패널에서 공유하는 동기화 상태 모델이다.
 export type SyncMode = "offline" | "syncing" | "synced" | "error" | "local-only";
@@ -30,11 +31,14 @@ export interface SyncResult {
   status: SyncStatus;
   changedRows: number;
   snapshot?: LocalDataSnapshot;
+  acknowledged?: PendingRevision[];
+  received?: { base: LocalDataSnapshot; snapshot: LocalDataSnapshot };
 }
 
 export interface SyncContext {
   device: Device;
   userId: string;
+  backend?: string;
 }
 
 export interface AuthState {
@@ -64,6 +68,7 @@ export interface RealtimeOptions {
 
 // 로컬 전용 모드와 Supabase 모드를 같은 앱 훅에서 사용할 수 있게 하는 계약이다.
 export interface SyncClient {
+  getBackend?(): string;
   getStatus(): SyncStatus;
   isConfigured(): boolean;
   getAuthState(): Promise<AuthState>;
@@ -74,7 +79,7 @@ export interface SyncClient {
     fromDate: string,
     toDate: string,
   ): Promise<FinanceDailySummary[]>;
-  pull(localSnapshot: LocalDataSnapshot, context: SyncContext): Promise<LocalDataSnapshot>;
+  pull(localSnapshot: LocalDataSnapshot, context: SyncContext, options?: { full?: boolean }): Promise<LocalDataSnapshot>;
   push(localSnapshot: LocalDataSnapshot, context: SyncContext): Promise<SyncResult>;
   subscribeRealtime(options: RealtimeOptions): RealtimeSubscription;
   startHeartbeat(context: SyncContext): RealtimeSubscription;

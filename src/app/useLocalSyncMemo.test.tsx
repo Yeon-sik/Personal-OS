@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { StorageAdapter } from "../lib/storage/storageAdapter";
 import { createEmptySnapshot } from "../lib/storage/storageAdapter";
+import { initializeSyncState, type PendingRevision } from "../lib/sync/syncState";
 import type {
   AuthState,
   FinanceDailySummary,
@@ -94,6 +95,18 @@ class MemoryStorage implements StorageAdapter {
   }
 }
 
+class RestartStorage extends MemoryStorage {
+  async load(): Promise<LocalDataSnapshot> {
+    const latest = this.saved.at(-1);
+    return latest ? structuredClone(latest) : super.load();
+  }
+}
+
+function checkpoint(snapshot = createEmptySnapshot()): LocalDataSnapshot {
+  const initialized = initializeSyncState(snapshot, { backend: "https://example.supabase.co", userId: "user-a" }, device.id);
+  return { ...initialized, syncState: { ...initialized.syncState!, pending: [], cursor: { epoch: "epoch", revision: "0" } } };
+}
+
 class FakeSyncClient implements SyncClient {
   readonly trace: string[];
   readonly pushSnapshots: LocalDataSnapshot[] = [];
@@ -103,6 +116,9 @@ class FakeSyncClient implements SyncClient {
   pullSnapshot: LocalDataSnapshot | null = null;
   pushResultSnapshot: LocalDataSnapshot | undefined = undefined;
   pushGate: Promise<void> | null = null;
+  acknowledgeSent = false;
+  pushAcknowledged: PendingRevision[] | undefined;
+  pushReceived: SyncResult["received"];
   activeRemoteOperations = 0;
   maxConcurrentRemoteOperations = 0;
   realtimeOptions: RealtimeOptions | null = null;
@@ -120,6 +136,8 @@ class FakeSyncClient implements SyncClient {
   isConfigured(): boolean {
     return true;
   }
+
+  getBackend(): string { return "https://example.supabase.co"; }
 
   async getAuthState(): Promise<AuthState> {
     this.trace.push("auth");
@@ -183,6 +201,8 @@ class FakeSyncClient implements SyncClient {
         changedRows: 0,
         status: this.status,
         snapshot: this.pushResultSnapshot,
+        acknowledged: this.acknowledgeSent ? structuredClone(localSnapshot.syncState?.pending ?? []) : this.pushAcknowledged,
+        received: this.pushReceived,
       };
     } finally {
       this.activeRemoteOperations -= 1;
@@ -583,7 +603,8 @@ describe("useLocalSyncMemo", () => {
     const pushIndex = syncClient.trace.lastIndexOf("push");
     const saveIndex = syncClient.trace.lastIndexOf("save");
     expect(pullIndex).toBeLessThan(pushIndex);
-    expect(pushIndex).toBeLessThan(saveIndex);
+    expect(saveIndex).toBeLessThan(pushIndex);
+    expect(storage.saved.at(-1)?.syncState?.pending).toHaveLength(1);
     expect(syncClient.pushSnapshots.at(-1)?.notes).toHaveLength(1);
   });
 
@@ -640,7 +661,7 @@ describe("useLocalSyncMemo", () => {
     expect(syncClient.heartbeatUnsubscribeCount).toBe(1);
   });
 
-  it("runs manual sync in pull, push, save order and applies the pulled snapshot", async () => {
+  it("saves the pulled checkpoint before pushing and applies the pulled snapshot", async () => {
     const trace: string[] = [];
     const storage = new MemoryStorage(createEmptySnapshot(), trace);
     const syncClient = new FakeSyncClient(trace);
@@ -657,7 +678,10 @@ describe("useLocalSyncMemo", () => {
       await flushEffects();
     });
 
-    expect(trace.slice(0, 3)).toEqual(["pull", "push", "save"]);
+    const pullIndex = trace.indexOf("pull");
+    const pushIndex = trace.indexOf("push");
+    expect(pullIndex).toBeLessThan(pushIndex);
+    expect(trace.slice(pullIndex + 1, pushIndex)).toContain("save");
     expect(currentHook.notes[0].id).toBe("pulled");
   });
 
@@ -813,6 +837,194 @@ describe("useLocalSyncMemo", () => {
     });
 
     expect(storage.saved.at(-1)?.notes).toHaveLength(1);
+  });
+
+  it("preserves a same-clock edit during push and acknowledges only the captured revision", async () => {
+    const note = createNote("note", "2026-08-01T00:00:00.000Z");
+    const storage = new RestartStorage(checkpoint({ ...createEmptySnapshot(), notes: [note] }));
+    const syncClient = new FakeSyncClient();
+    syncClient.acknowledgeSent = true;
+    await renderHook(storage, syncClient);
+    await settleInitialSave();
+    let release!: () => void;
+    syncClient.pushGate = new Promise<void>((resolve) => { release = resolve; });
+    await act(async () => {
+      currentHook.updateSelectedNoteContent("sent");
+      await vi.advanceTimersByTimeAsync(400);
+      await flushEffects();
+    });
+    const sending = storage.saved.at(-1)!;
+    const sentRevision = sending.syncState!.pending[0].revision;
+    syncClient.pushResultSnapshot = sending;
+    vi.setSystemTime(new Date(sending.notes[0].updatedAt));
+    await act(async () => {
+      currentHook.updateSelectedNoteContent("edited during push");
+      await flushEffects();
+    });
+    await act(async () => { release(); await flushEffects(24); });
+    expect(currentHook.notes[0].content).toBe("edited during push");
+    expect(storage.saved.at(-1)?.syncState?.pending[0].revision).toBeGreaterThan(sentRevision);
+    expect(storage.saved.at(-1)?.notes[0].updatedAt).toBe(sending.notes[0].updatedAt);
+    syncClient.pushResultSnapshot = undefined;
+    await settleInitialSave();
+    expect(syncClient.pushSnapshots.at(-1)?.notes[0].content).toBe("edited during push");
+    expect(storage.saved.at(-1)?.syncState?.pending).toEqual([]);
+  });
+
+  it("durably saves partial acknowledgments on error and retries the remaining revision after restart", async () => {
+    const storage = new RestartStorage(checkpoint());
+    const syncClient = new FakeSyncClient();
+    await renderHook(storage, syncClient);
+    await settleInitialSave();
+    await act(async () => { currentHook.addNote(); currentHook.addNote(); await flushEffects(); });
+    const current = syncClient.realtimeOptions!.getSnapshot();
+    syncClient.pushAcknowledged = [current.syncState!.pending[0]];
+    syncClient.status = { ...syncedStatus, mode: "error", label: "error", detail: "partial write failed" };
+    // Manual sync's pull succeeds; only the push reports partial failure.
+    const pull = syncClient.pull.bind(syncClient);
+    syncClient.pull = async (local, context) => {
+      syncClient.status = syncedStatus;
+      return pull(local, context);
+    };
+    const push = syncClient.push.bind(syncClient);
+    syncClient.push = async (local, context) => {
+      syncClient.status = { ...syncedStatus, mode: "error", label: "error", detail: "partial write failed" };
+      return push(local, context);
+    };
+    await act(async () => { await currentHook.manualSync(); await flushEffects(24); });
+    expect(currentHook.error).toBe("partial write failed");
+    expect(storage.saved.at(-1)?.syncState?.pending).toEqual([current.syncState!.pending[1]]);
+    await act(async () => { renderer?.unmount(); renderer = null; await flushEffects(); });
+    const restarted = new FakeSyncClient();
+    restarted.acknowledgeSent = true;
+    await renderHook(storage, restarted);
+    await settleInitialSave();
+    expect(restarted.pushSnapshots[0].syncState?.pending).toEqual([current.syncState!.pending[1]]);
+    expect(storage.saved.at(-1)?.syncState?.pending).toEqual([]);
+  });
+
+  it("does not advance a pull cursor when its local save fails and replays it after restart", async () => {
+    let failCheckpoint = true;
+    class FailingStorage extends RestartStorage {
+      async save(snapshot: LocalDataSnapshot) {
+        if (failCheckpoint && snapshot.syncState?.cursor?.revision === "7") throw new Error("checkpoint save failed");
+        await super.save(snapshot);
+      }
+    }
+    const storage = new FailingStorage(checkpoint());
+    const syncClient = new FakeSyncClient();
+    await renderHook(storage, syncClient);
+    await settleInitialSave();
+    const local = syncClient.realtimeOptions!.getSnapshot();
+    const remote = { ...local, notes: [createNote("remote", "2026-08-02T00:00:00Z")],
+      syncState: { ...local.syncState!, cursor: { epoch: "epoch", revision: "7" } } };
+    syncClient.pullSnapshot = remote;
+    await act(async () => { await currentHook.manualSync(); await flushEffects(24); });
+    expect(currentHook.error).toBe("checkpoint save failed");
+    expect(syncClient.realtimeOptions!.getSnapshot().syncState?.cursor?.revision).toBe("0");
+    expect(storage.saved.at(-1)?.syncState?.cursor?.revision).toBe("0");
+    expect(currentHook.notes).toEqual([]);
+    expect(syncClient.pushSnapshots).toEqual([]);
+    await act(async () => { renderer?.unmount(); renderer = null; await flushEffects(); });
+    failCheckpoint = false;
+    const restarted = new FakeSyncClient();
+    restarted.pullSnapshot = remote;
+    await renderHook(storage, restarted);
+    expect(storage.saved.at(-1)?.syncState?.cursor?.revision).toBe("7");
+    expect(currentHook.notes[0].id).toBe("remote");
+  });
+
+  it("retries an acknowledgment and post-write cursor together after a local checkpoint failure", async () => {
+    let failCheckpoint = true;
+    class FailingStorage extends RestartStorage {
+      async save(snapshot: LocalDataSnapshot) {
+        if (failCheckpoint && snapshot.syncState?.cursor?.revision === "8") throw new Error("combined checkpoint failed");
+        await super.save(snapshot);
+      }
+    }
+    const storage = new FailingStorage(checkpoint());
+    const syncClient = new FakeSyncClient();
+    syncClient.acknowledgeSent = true;
+    await renderHook(storage, syncClient);
+    await settleInitialSave();
+    await act(async () => { currentHook.addNote(); await flushEffects(); });
+    const dirty = syncClient.realtimeOptions!.getSnapshot();
+    const confirmed = { ...dirty, syncState: { ...dirty.syncState!, pending: [] } };
+    syncClient.pushResultSnapshot = dirty;
+    syncClient.pushReceived = { base: confirmed,
+      snapshot: { ...confirmed, syncState: { ...confirmed.syncState!, cursor: { epoch: "epoch", revision: "8" } } } };
+    await settleInitialSave();
+    expect(currentHook.error).toBe("combined checkpoint failed");
+    expect(storage.saved.at(-1)?.syncState?.cursor?.revision).toBe("0");
+    expect(storage.saved.at(-1)?.syncState?.pending).toHaveLength(1);
+    expect(syncClient.realtimeOptions!.getSnapshot().syncState?.pending).toHaveLength(1);
+    failCheckpoint = false;
+    await act(async () => { await currentHook.manualSync(); await flushEffects(24); });
+    expect(storage.saved.at(-1)?.syncState?.cursor?.revision).toBe("8");
+    expect(storage.saved.at(-1)?.syncState?.pending).toEqual([]);
+  });
+
+  it("rebases an edit made during a delayed acknowledgment save", async () => {
+    let delayAcknowledgment = false;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    class DelayedStorage extends RestartStorage {
+      async save(snapshot: LocalDataSnapshot) {
+        if (delayAcknowledgment && snapshot.notes.length && !snapshot.syncState?.pending.length) {
+          delayAcknowledgment = false;
+          await gate;
+        }
+        await super.save(snapshot);
+      }
+    }
+    const storage = new DelayedStorage(checkpoint());
+    const syncClient = new FakeSyncClient();
+    syncClient.acknowledgeSent = true;
+    await renderHook(storage, syncClient);
+    await settleInitialSave();
+    delayAcknowledgment = true;
+    await act(async () => { currentHook.addNote(); await vi.advanceTimersByTimeAsync(400); await flushEffects(); });
+    expect(syncClient.pushSnapshots).toHaveLength(1);
+    const sentRevision = syncClient.pushSnapshots[0].syncState!.pending[0].revision;
+    await act(async () => { currentHook.updateSelectedNoteContent("while saving"); await flushEffects(); });
+    await act(async () => { release(); await flushEffects(24); });
+    expect(currentHook.notes[0].content).toBe("while saving");
+    expect(storage.saved.at(-1)?.notes[0].content).toBe("while saving");
+    expect(storage.saved.at(-1)?.syncState?.pending[0].revision).toBeGreaterThan(sentRevision);
+  });
+
+  it("does not roll back a cursor or unrelated source views from a queued realtime cache", async () => {
+    const weight = makeWeightRecord({ sourceApp: "fitness", weightKg: 70 });
+    const local = checkpoint({ ...createEmptySnapshot(), fitnessWeightRecords: [weight] });
+    const storage = new RestartStorage(local);
+    const syncClient = new FakeSyncClient();
+    await renderHook(storage, syncClient);
+    await settleInitialSave();
+    const realtime = syncClient.realtimeOptions!;
+    const old = realtime.getSnapshot();
+    syncClient.pullSnapshot = { ...old,
+      fitnessWeightRecords: [{ ...weight, weightKg: 71, updatedAt: "2026-08-02T00:00:00Z" }],
+      syncState: { ...old.syncState!, cursor: { epoch: "epoch", revision: "9" } } };
+    await act(async () => { await currentHook.manualSync(); await flushEffects(24); });
+    await act(async () => {
+      realtime.onSnapshot({ ...old, notes: [createNote("realtime", "2026-08-03T00:00:00Z")] }, syncedStatus);
+      await flushEffects(24);
+    });
+    expect(storage.saved.at(-1)?.syncState?.cursor?.revision).toBe("9");
+    expect(storage.saved.at(-1)?.fitnessWeightRecords?.[0].weightKg).toBe(71);
+  });
+
+  it("rejects an existing queue owned by another account before changing the config binding", async () => {
+    const local = checkpoint({ ...createEmptySnapshot(), notes: [createNote("local", "2026-08-01T00:00:00Z")] });
+    const storage = new RestartStorage(local);
+    const syncClient = new FakeSyncClient();
+    syncClient.authState = { userId: "user-b", email: "other@example.com" };
+    await renderHook(storage, syncClient, null);
+    expect(syncClient.trace).toContain("signOut");
+    expect(syncClient.trace).not.toContain("pull");
+    expect(currentHook.error).toContain("다른 계정");
+    expect(currentHook.notes[0].id).toBe("local");
+    expect(currentHook.supabaseConfig.boundUserId).toBe("");
   });
 
   it("rejects a sign-in that conflicts with the persisted user binding", async () => {

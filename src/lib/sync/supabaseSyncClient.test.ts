@@ -30,18 +30,39 @@ function createFakeClient({
   upsertErrorsByTable = {},
 }: FakeClientOptions = {}) {
   const select = vi.fn((tableName: SnapshotTableName) => ({
-    eq: vi.fn(() => ({
-      order: vi.fn(() => ({
-        range: vi.fn(async (from: number, to: number) => ({
-          data: (rowsByTable[tableName] ?? []).slice(from, to + 1),
-          error: selectErrorsByTable[tableName] ?? selectError,
+    eq: vi.fn((_column: string, owner: string) => {
+      let ids: string[] | undefined;
+      const query = {
+        in: vi.fn((_column: string, values: string[]) => { ids = values; return query; }),
+        order: vi.fn(() => ({
+          range: vi.fn(async (from: number, to: number) => ({
+            data: (rowsByTable[tableName] ?? []).filter((value) => {
+              const row = value as { id: string; user_id: string };
+              return row.user_id === owner && (!ids || ids.includes(row.id));
+            }).slice(from, to + 1),
+            error: selectErrorsByTable[tableName] ?? selectError,
+          })),
         })),
-      })),
-    })),
+      };
+      return query;
+    }),
   }));
-  const upsert = vi.fn((tableName: SnapshotTableName) =>
-    Promise.resolve({ error: upsertErrorsByTable[tableName] ?? null }),
-  );
+  const upsert = vi.fn((tableName: SnapshotTableName, values: unknown | unknown[]) => {
+    const error = upsertErrorsByTable[tableName] ?? null;
+    if (!error) {
+      const stored = rowsByTable[tableName] ?? [];
+      for (const value of Array.isArray(values) ? values : [values]) {
+        const row = value as { id: string; updated_at?: string; deleted_at?: string | null };
+        const index = stored.findIndex((item) => (item as typeof row).id === row.id);
+        const old = stored[index] as typeof row | undefined;
+        if (!old) stored.push(row);
+        else if (String(row.updated_at) > String(old.updated_at) ||
+          (row.updated_at === old.updated_at && !old.deleted_at && row.deleted_at)) stored[index] = row;
+      }
+      rowsByTable[tableName] = stored;
+    }
+    return Promise.resolve({ error });
+  });
   const session = userId
     ? { user: { id: userId, email: `${userId}@example.com` } }
     : null;
@@ -57,7 +78,7 @@ function createFakeClient({
     },
     from: vi.fn((tableName: SnapshotTableName) => ({
       select: () => select(tableName),
-      upsert: () => upsert(tableName),
+      upsert: (values: unknown) => upsert(tableName, values),
     })),
   };
 
@@ -216,7 +237,7 @@ describe("SupabaseSyncClient facade", () => {
 
     expect(result.status.mode).toBe("synced");
     expect(result.snapshot?.notes[0].content).toBe("server value");
-    expect(fake.select).toHaveBeenCalledTimes(19);
+    expect(fake.select).toHaveBeenCalledTimes(1);
   });
 
   it("uses the server value for equal-time active rows during reconciliation", async () => {
@@ -262,7 +283,8 @@ describe("SupabaseSyncClient facade", () => {
     );
 
     expect(result.status.mode).toBe("error");
-    expect(result.snapshot).toBeUndefined();
+    expect(result.snapshot?.notes).toHaveLength(1);
+    expect(result.acknowledged).toEqual([{ collection: "notes", id: "note-1", revision: 1 }]);
     expect(result.status.detail).toBe("tasks upsert failed");
   });
 
