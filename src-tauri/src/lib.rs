@@ -322,7 +322,7 @@ fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
         &[&quick_capture_item, &show_item, &hide_item, &quit_item],
     )?;
 
-    let mut tray_builder = TrayIconBuilder::new()
+    let mut tray_builder = TrayIconBuilder::with_id("main-tray")
         .tooltip("Yeonsik's Note")
         .menu(&menu)
         .show_menu_on_left_click(false)
@@ -353,6 +353,39 @@ fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
+#[tauri::command]
+fn set_launcher_icon_mode(app: tauri::AppHandle, mode: String) -> Result<(), String> {
+    let (window_bytes, tray_bytes): (&[u8], &[u8]) = match mode.as_str() {
+        "dark" => (
+            include_bytes!("../icons/launcher-v3/window-dark.png"),
+            include_bytes!("../icons/launcher-v3/tray-dark.png"),
+        ),
+        "light" => (
+            include_bytes!("../icons/launcher-v3/window-white.png"),
+            include_bytes!("../icons/launcher-v3/tray-white.png"),
+        ),
+        _ => return Err("Unsupported launcher icon theme.".to_string()),
+    };
+    let window_icon = tauri::image::Image::from_bytes(window_bytes)
+        .map_err(|error| error.to_string())?;
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Main window is unavailable.".to_string())?;
+    window.set_icon(window_icon).map_err(|error| error.to_string())?;
+
+    #[cfg(desktop)]
+    {
+        let tray_icon = tauri::image::Image::from_bytes(tray_bytes)
+            .map_err(|error| error.to_string())?;
+        let tray = app
+            .tray_by_id("main-tray")
+            .ok_or_else(|| "System tray icon is unavailable.".to_string())?;
+        tray.set_icon(Some(tray_icon)).map_err(|error| error.to_string())?;
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -365,6 +398,7 @@ pub fn run() {
             load_persisted_device,
             save_persisted_device,
             quick_capture_shortcut_status,
+            set_launcher_icon_mode,
             show_quick_capture,
             db_editor::db_editor_pat_status,
             db_editor::db_editor_save_pat,

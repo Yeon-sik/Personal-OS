@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 
 export type ThemeMode = "system" | "light" | "dark";
 export type ResolvedTheme = "light" | "dark";
@@ -67,6 +68,13 @@ export function useThemeMode() {
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.dataset.themeMode = themeMode;
   }, [resolvedTheme, themeMode]);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+    void invoke("set_launcher_icon_mode", { mode: resolvedTheme }).catch(() => undefined);
+  }, [resolvedTheme]);
 
   const setThemeMode = useCallback((nextMode: ThemeMode) => {
     setThemeModeState(nextMode);
