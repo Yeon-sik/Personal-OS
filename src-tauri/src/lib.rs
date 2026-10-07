@@ -366,15 +366,15 @@ fn set_launcher_icon_mode(app: tauri::AppHandle, mode: String) -> Result<(), Str
         ),
         _ => return Err("Unsupported launcher icon theme.".to_string()),
     };
-    let window_icon = tauri::image::Image::from_bytes(window_bytes)
-        .map_err(|error| error.to_string())?;
-    let window = app
-        .get_webview_window("main")
-        .ok_or_else(|| "Main window is unavailable.".to_string())?;
-    window.set_icon(window_icon).map_err(|error| error.to_string())?;
-
     #[cfg(desktop)]
     {
+        let window_icon = tauri::image::Image::from_bytes(window_bytes)
+            .map_err(|error| error.to_string())?;
+        let window = app
+            .get_webview_window("main")
+            .ok_or_else(|| "Main window is unavailable.".to_string())?;
+        window.set_icon(window_icon).map_err(|error| error.to_string())?;
+
         let tray_icon = tauri::image::Image::from_bytes(tray_bytes)
             .map_err(|error| error.to_string())?;
         let tray = app
@@ -382,6 +382,9 @@ fn set_launcher_icon_mode(app: tauri::AppHandle, mode: String) -> Result<(), Str
             .ok_or_else(|| "System tray icon is unavailable.".to_string())?;
         tray.set_icon(Some(tray_icon)).map_err(|error| error.to_string())?;
     }
+
+    #[cfg(mobile)]
+    let _ = (app, window_bytes, tray_bytes);
 
     Ok(())
 }
