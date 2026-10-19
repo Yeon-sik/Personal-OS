@@ -2,6 +2,8 @@
 
 2026-10-20, Asia/Seoul. **BLOCKED — main 병합하지 않음.**
 
+> 후속 운영 보안 작업으로 아래 RLS OFF 7건은 해소됐다. 현재 정책·검증 결과와 남은 실기기 blocker는 [운영 보안 후속 보고서](action-calendar-security-2026-10-20.md)를 따른다. 이 문서의 과거 감사 결과는 당시 기록으로 보존한다.
+
 ## 1. Branch / HEAD
 
 - Integration branch: `feat/action-calendar-release-20261020`.
