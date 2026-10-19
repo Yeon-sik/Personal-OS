@@ -455,7 +455,7 @@ describe("recordAggregation", () => {
     expect(markers["2026-06-09"]?.tasks.dueCount).toBe(1);
   });
 
-  it("includes still-active scheduled tasks in earlier date records", () => {
+  it("does not show a deadline on unrelated earlier dates", () => {
     const scheduledTask: Task = {
       ...directTask,
       id: "task-scheduled",
@@ -473,8 +473,8 @@ describe("recordAggregation", () => {
       "2026-06-08",
     );
 
-    expect(records.tasks).toHaveLength(1);
-    expect(records.tasks[0].id).toBe("task-scheduled");
+    expect(records.tasks).toHaveLength(0);
+    expect(getRecordsForDate({ ...snapshot, tasks: [scheduledTask] }, "2026-06-09").tasks[0].id).toBe("task-scheduled");
   });
 
   it("counts planned tasks on planned dates and deadlines only on due dates", () => {

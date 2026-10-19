@@ -75,6 +75,7 @@ export interface SnapshotWriteResult {
 }
 
 export interface SnapshotTransport {
+  ensureAction?(row: import("./rows").TaskRow): Promise<SnapshotQueryResult<import("./rows").TaskRow>>;
   fitnessReadModels?: FitnessReadModelDiagnostics;
   fullPullSourceFailed?: boolean;
   selectRows<Row>(
@@ -115,6 +116,10 @@ export function createSupabaseSnapshotTransport(
   supabase: SupabaseClient,
 ): SnapshotTransport {
   return {
+    async ensureAction(row) {
+      const client = supabase as unknown as { rpc(name: string, args: { action: unknown }): Promise<SnapshotQueryResult<import("./rows").TaskRow>> };
+      return client.rpc("ensure_action_v1", { action: row });
+    },
     async selectRows<Row>(tableName: SnapshotTableName, userId: string, options?: { ids?: string[]; dates?: string[] }) {
       const table = supabase.from(tableName) as unknown as SelectTable<Row>;
       const rows: Row[] = [];
@@ -606,6 +611,9 @@ export async function pushSnapshot(
   context: SyncContext,
   lastSeenAt: string,
 ): Promise<PushSnapshotResult> {
+  if (localSnapshot.syncState?.pending.some(item => item.operation === "ENSURE_ACTION")) {
+    throw new Error("일정 최초 생성은 증분 전송 경로로 처리해야 합니다.");
+  }
   const payload = createPushPayload(localSnapshot, context, lastSeenAt);
   let changedRows = 0;
 

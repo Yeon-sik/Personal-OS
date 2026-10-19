@@ -12,6 +12,8 @@ import {
 } from "../../lib/dataTrust/backfillMetadata";
 import { formatLocalDate, isWithinDateRange, parseDateInput } from "../fitness/fitnessDate";
 import { getVisibleSharedWorkouts, type SharedWorkoutSummary } from "../fitness-summary/sharedWorkoutSummaries";
+import { actionRolesOnDate, actionDatesInRange } from "../actions/actionCalendar";
+import { calendarDate } from "../actions/actionTime";
 
 export type LocalDateString = string;
 
@@ -24,6 +26,10 @@ export interface CalendarTaskMarker {
   dueCount: number;
   plannedCount: number;
   completedPlannedCount: number;
+  confirmedCount?: number;
+  candidateCount?: number;
+  eventCount?: number;
+  windowCount?: number;
 }
 
 export interface CalendarProgressStack {
@@ -117,7 +123,7 @@ function getTaskActivityDate(task: Task): LocalDateString | null {
 }
 
 function getTaskProductivityDate(task: Task): LocalDateString | null {
-  return task.plannedDate;
+  return task.registrationState === "CANDIDATE" || (task.plannedDate && task.plannedDate > calendarDate()) ? null : task.plannedDate;
 }
 
 function getTaskVisibleRange(
@@ -146,14 +152,7 @@ function getTaskVisibleRange(
 }
 
 function isTaskVisibleOnDate(task: Task, date: LocalDateString): boolean {
-  const visibleRange = getTaskVisibleRange(task);
-
-  return (
-    task.plannedDate === date ||
-    (visibleRange
-      ? isWithinDateRange(date, visibleRange.startDate, visibleRange.endDate)
-      : false)
-  );
+  return actionRolesOnDate(task, date).length > 0;
 }
 
 function isDateInRange(date: string | null, range: DateRange): boolean {
@@ -402,17 +401,20 @@ export function getCalendarMarkers(
   }
 
   for (const task of snapshot.tasks.filter(isVisibleEntity)) {
-    if (isDateInRange(task.plannedDate, range)) {
-      const taskMarker = ensureMarker(markers, task.plannedDate as LocalDateString).tasks;
-      taskMarker.plannedCount += 1;
-
-      if (task.isDone) {
-        taskMarker.completedPlannedCount += 1;
+    for (const { date, roles } of actionDatesInRange(task, range.startDate, range.endDate)) {
+      const marker = ensureMarker(markers, date).tasks;
+      if (task.registrationState === "CANDIDATE") {
+        marker.candidateCount = (marker.candidateCount ?? 0) + 1;
+        continue;
       }
-    }
-
-    if (isDateInRange(task.dueDate, range)) {
-      ensureMarker(markers, task.dueDate as LocalDateString).tasks.dueCount += 1;
+      marker.confirmedCount = (marker.confirmedCount ?? 0) + 1;
+      if (roles.includes("PLAN")) {
+        marker.plannedCount++;
+        if (task.isDone) marker.completedPlannedCount++;
+      }
+      if (roles.includes("DEADLINE")) marker.dueCount++;
+      if (roles.includes("EVENT")) marker.eventCount = (marker.eventCount ?? 0) + 1;
+      if (roles.includes("WINDOW")) marker.windowCount = (marker.windowCount ?? 0) + 1;
     }
   }
 

@@ -1,4 +1,5 @@
 import type { SupabaseClient as SupabaseClientBase } from "@supabase/supabase-js";
+import type { TaskActionRow } from "./actionFields";
 
 export interface EntityAuditRow {
   created_at?: string | null;
@@ -17,7 +18,7 @@ export interface NoteRow extends EntityAuditRow {
   device_id: string;
 }
 
-export interface TaskRow extends EntityAuditRow {
+export interface TaskRow extends EntityAuditRow, TaskActionRow {
   id: string;
   user_id: string;
   text: string;

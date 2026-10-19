@@ -102,7 +102,7 @@ const emptyProgressStack: CalendarProgressStack = {
   reservedTwo: 0,
 };
 
-const calendarCellSize = "h-[clamp(5.75rem,16vw,6.75rem)] min-w-0";
+const calendarCellSize = "h-[clamp(8.25rem,24vw,9rem)] min-w-0";
 const calendarCellBase =
   `${calendarCellSize} flex flex-col gap-0 rounded-md border-2 px-1 py-0.5 text-xs`;
 
@@ -117,6 +117,9 @@ function renderPlanMarker(taskMarker: CalendarTaskMarker) {
   ].filter(Boolean).join(" · ");
 
   return (
+    <div className="space-y-0.5">
+      {(taskMarker.confirmedCount ?? 0) > 0 && <span className="block truncate text-[10px] font-semibold text-teal-800 dark:text-teal-300" title={"확정 일정 " + taskMarker.confirmedCount + "개"}>일정 {taskMarker.confirmedCount}</span>}
+      {(taskMarker.candidateCount ?? 0) > 0 && <span className="block truncate rounded-sm border border-dashed border-amber-600 text-[10px] font-semibold text-amber-900 dark:text-amber-200" title={"후보 " + taskMarker.candidateCount + "개"}>후보 {taskMarker.candidateCount}</span>}
     <span
       title={planTitle || "Plan"}
       className="flex h-2 min-w-0 items-center gap-0.5 overflow-hidden text-[7px] font-semibold leading-none"
@@ -129,6 +132,7 @@ function renderPlanMarker(taskMarker: CalendarTaskMarker) {
         {dueCount}
       </span>
     </span>
+    </div>
   );
 }
 
@@ -242,6 +246,7 @@ export function RecordCalendar({
             <button
               key={date}
               type="button"
+              aria-label={`${date} · 일정 ${taskMarker.confirmedCount ?? 0}개 · 후보 ${taskMarker.candidateCount ?? 0}개`}
               onClick={() => {
                 onSelectDate(date);
               }}

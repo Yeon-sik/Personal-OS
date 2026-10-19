@@ -27,11 +27,13 @@ import { normalizeEntityAuditFields } from "../dataTrust/backfillMetadata";
 import { normalizeProjectGitHubIdentity } from "../dataTrust/projectGitHubIdentity";
 import { createEmptySnapshot, type StorageAdapter } from "./storageAdapter";
 import { parseSyncState } from "../sync/syncState";
+import { normalizeActionFields } from "../../features/actions/actionModel";
 
-const STORAGE_KEY = "localsyncmemo:snapshot:v1";
+const STORAGE_KEY = "localsyncmemo:snapshot:v2";
+const LEGACY_STORAGE_KEY = "localsyncmemo:snapshot:v1";
 
 interface StoredEnvelope {
-  version: 1;
+  version: 2;
   snapshot: LocalDataSnapshot;
 }
 
@@ -413,6 +415,8 @@ function normalizeTask(value: unknown): Task | null {
     ? value.plannedDate
     : null;
   return {
+    ...normalizeActionFields(value),
+    ...(typeof value.actionOwnerScope === "string" ? { actionOwnerScope: value.actionOwnerScope } : {}),
     id: value.id as string,
     text: value.text,
     isDone: value.isDone,
@@ -695,7 +699,8 @@ function normalizeSnapshot(value: unknown): LocalDataSnapshot {
 function parseStoredValue(rawValue: string): LocalDataSnapshot {
   const parsed = JSON.parse(rawValue) as unknown;
 
-  if (isRecord(parsed) && parsed.version === 1 && "snapshot" in parsed) {
+  if (isRecord(parsed) && "version" in parsed) {
+    if (![1, 2].includes(parsed.version as number) || !("snapshot" in parsed)) throw new Error("지원하지 않는 저장 형식입니다.");
     return normalizeSnapshot(parsed.snapshot);
   }
 
@@ -703,22 +708,41 @@ function parseStoredValue(rawValue: string): LocalDataSnapshot {
 }
 
 export class LocalStorageAdapter implements StorageAdapter {
+  private expectedRaw: string | null | undefined;
+
+  private async locked<T>(operation: () => T): Promise<T> {
+    if (typeof navigator !== "undefined" && navigator.locks) {
+      return navigator.locks.request(STORAGE_KEY, operation);
+    }
+    // Non-browser/test adapters execute synchronously; compare-before-write
+    // still detects an intervening writer without silently replacing its data.
+    return operation();
+  }
+
   async load(): Promise<LocalDataSnapshot> {
     if (typeof window === "undefined") {
       return createEmptySnapshot();
     }
 
-    const rawValue = window.localStorage.getItem(STORAGE_KEY);
-
-    if (!rawValue) {
-      return createEmptySnapshot();
-    }
-
-    try {
-      return parseStoredValue(rawValue);
-    } catch {
-      throw new Error("저장된 로컬 데이터를 읽을 수 없습니다.");
-    }
+    return this.locked(() => {
+      try {
+        let rawValue = window.localStorage.getItem(STORAGE_KEY);
+        if (rawValue === null) {
+          const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+          if (legacy !== null) {
+            const migrated = parseStoredValue(legacy);
+            rawValue = JSON.stringify({ version: 2, snapshot: migrated });
+            window.localStorage.setItem(STORAGE_KEY, rawValue);
+            if (window.localStorage.getItem(STORAGE_KEY) !== rawValue) throw new Error("저장 검증 실패");
+          }
+        }
+        const snapshot = rawValue === null ? createEmptySnapshot() : parseStoredValue(rawValue);
+        this.expectedRaw = rawValue;
+        return snapshot;
+      } catch {
+        throw new Error("로컬 데이터 전환 또는 읽기에 실패했습니다. 기존 데이터는 지우지 말고 저장 공간과 복구 사본을 확인해 주세요.");
+      }
+    });
   }
 
   async save(snapshot: LocalDataSnapshot): Promise<void> {
@@ -726,16 +750,23 @@ export class LocalStorageAdapter implements StorageAdapter {
       return;
     }
 
-    try {
+    return this.locked(() => {
+      const current = window.localStorage.getItem(STORAGE_KEY);
+      if (this.expectedRaw !== undefined && current !== this.expectedRaw) {
+        throw new Error("다른 창에서 데이터가 변경되었습니다. 이 창의 미저장 내용을 복사한 뒤 다시 열어 주세요.");
+      }
+      try {
       const envelope: StoredEnvelope = {
-        version: 1,
+        version: 2,
         snapshot,
       };
-
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(envelope));
-    } catch {
-      throw new Error("로컬 저장소에 변경사항을 저장하지 못했습니다.");
-    }
+      const serialized = JSON.stringify(envelope);
+      window.localStorage.setItem(STORAGE_KEY, serialized);
+      this.expectedRaw = serialized;
+      } catch {
+        throw new Error("로컬 저장소에 변경사항을 저장하지 못했습니다.");
+      }
+    });
   }
 }
 

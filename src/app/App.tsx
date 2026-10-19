@@ -78,7 +78,8 @@ export function App() {
   const snapshot: LocalDataSnapshot = useMemo(
     () => ({
       notes: memo.notes,
-      tasks: memo.tasks,
+      tasks: memo.calendarTasks ?? memo.tasks,
+      syncState: memo.actionSyncState,
       workoutRecords: memo.workoutRecords,
       fitnessSharedWorkoutRecords: memo.fitnessSharedWorkoutRecords,
       fitnessSummaryProjections: memo.fitnessSummaryProjections,
@@ -114,6 +115,8 @@ export function App() {
       memo.projectMilestones,
       memo.projects,
       memo.tasks,
+      memo.calendarTasks,
+      memo.actionSyncState,
       memo.weightRecords,
       memo.workoutRecords,
       memo.workstreamActionDependencies,
@@ -204,6 +207,9 @@ export function App() {
                     onDeleteTask={memo.deleteTask}
                     onSelectDate={setSelectedDate}
                     onToggleTask={memo.toggleTask}
+                    actionActions={memo.actionActions}
+                    onManualSync={memo.manualSync}
+                    isAuthenticated={memo.isAuthenticated}
                   />
                 ) : recordSection === "memo" ? (
                   <MemoPanel

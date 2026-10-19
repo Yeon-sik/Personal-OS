@@ -73,6 +73,7 @@ export interface MemoSyncRuntime
   supabaseConfig: RuntimeConfig;
   syncStatus: SyncStatus;
   userId: string;
+  commitDurably: (updater: Parameters<SnapshotStore["commitSnapshot"]>[0], track?: boolean) => Promise<void>;
 }
 
 export function useMemoSyncRuntime(
@@ -168,6 +169,11 @@ export function useMemoSyncRuntime(
         }
       }
     }), [applyRemoteSnapshot, snapshotRef, storage]);
+
+  const commitDurably = useCallback(async (updater: Parameters<SnapshotStore["commitSnapshot"]>[0], track = true) => {
+    if (!device || !isReady || localLoadFailed) throw new Error("로컬 저장 준비가 완료되지 않았습니다.");
+    await persistRemoteSnapshot(current => track ? trackLocalChanges(current, updater(current), device.id) : updater(current));
+  }, [device, isReady, localLoadFailed, persistRemoteSnapshot]);
 
   useEffect(() => {
     if (injectedSyncClient || injectedUserId) {
@@ -772,6 +778,7 @@ export function useMemoSyncRuntime(
     autostartEnabled,
     autostartSupported,
     commitSnapshot: commitLocalSnapshot,
+    commitDurably,
     device,
     error,
     isAuthenticated: Boolean(authenticatedUserId),

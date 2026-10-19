@@ -21,7 +21,7 @@ export interface HomePanelProps {
 export function HomePanel({ snapshot, syncStatus, onOpenRecords, onOpenProjects, onQuickCapture, today = formatLocalDate() }: HomePanelProps) {
   const todayRecords = useMemo(() => getRecordsForDate(snapshot, today), [snapshot, today]);
   const fitness = useMemo(() => getFitnessSummary(snapshot, today), [snapshot, today]);
-  const todayPlannedTasks = todayRecords.tasks.filter((task) => task.plannedDate === today);
+  const todayPlannedTasks = todayRecords.tasks.filter((task) => task.plannedDate === today && task.registrationState !== "CANDIDATE");
   const remainingTasks = todayPlannedTasks.filter((task) => !task.isDone);
   const completedTasks = todayPlannedTasks.filter((task) => task.isDone);
   const liveProjects = snapshot.projects.filter((project) => project.deletedAt === null);
