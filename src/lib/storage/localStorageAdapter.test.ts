@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { LocalDataSnapshot } from "../../types";
 import { LocalStorageAdapter } from "./localStorageAdapter";
 import { createEmptySnapshot } from "./storageAdapter";
-import { makeWorkoutRecord } from "../sync/supabase/testFixtures";
+import { makeSnapshot, makeTask, makeWorkoutRecord } from "../sync/supabase/testFixtures";
+import { initializeSyncState } from "../sync/syncState";
 
 const STORAGE_KEY = "localsyncmemo:snapshot:v1";
 
@@ -46,6 +47,46 @@ beforeEach(() => {
 });
 
 describe("LocalStorageAdapter", () => {
+  it.each([1, 2])("upgrades v%s without losing pending conflict, local-only Action or tombstone", async version => {
+    const scope = { backend: "https://example.supabase.co", userId: "owner" };
+    const initial = makeTask({ id: "local-action", sourceNamespace: "release-test", externalKey: "same-identity",
+      actionOwnerScope: scope.userId, origin: "CHATGPT", registrationState: "CONFIRMED" });
+    const edited = { ...initial, text: "unsynced user edit", updatedAt: "2026-10-20T00:00:00Z" };
+    const deleted = makeTask({ id: "deleted-task", deletedAt: "2026-10-19T00:00:00Z" });
+    const snapshot = initializeSyncState(makeSnapshot({ tasks: [edited, deleted] }), scope, edited.deviceId);
+    snapshot.syncState!.pending = [
+      { collection: "tasks", id: edited.id, revision: 1, operation: "ENSURE_ACTION", initialTask: initial,
+        conflictTask: { ...initial, text: "server copy" } },
+      { collection: "tasks", id: deleted.id, revision: 2 },
+    ];
+    snapshot.syncState!.nextRevision = 2;
+    const key = `localsyncmemo:snapshot:v${version}`;
+    const oldRaw = JSON.stringify({ version, snapshot });
+    browserStorage.setItem(key, oldRaw);
+    const adapter = new LocalStorageAdapter();
+    const loaded = await adapter.load();
+    expect(loaded.tasks).toMatchObject(snapshot.tasks);
+    expect(loaded.syncState).toEqual(snapshot.syncState);
+    await adapter.save(loaded);
+    const restarted = await new LocalStorageAdapter().load();
+    expect(restarted.tasks).toEqual(loaded.tasks);
+    expect(restarted.syncState).toEqual(snapshot.syncState);
+    if (version === 1) expect(browserStorage.getItem(key)).toBe(oldRaw);
+    expect(() => initializeSyncState(restarted, { ...scope, userId: "other-owner" }, edited.deviceId)).toThrow("다른 서버/계정");
+    expect((await new LocalStorageAdapter().load()).syncState?.pending).toHaveLength(2);
+  });
+
+  it("retains the old snapshot when an upgrade write fails", async () => {
+    const raw = JSON.stringify(makeSnapshot({ tasks: [makeTask({ text: "only local copy" })] }));
+    browserStorage.setItem(STORAGE_KEY, raw);
+    const write = vi.spyOn(browserStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
+    await expect(new LocalStorageAdapter().load()).rejects.toThrow("기존 데이터는 지우지 말고");
+    expect(browserStorage.getItem(STORAGE_KEY)).toBe(raw);
+    expect(browserStorage.getItem("localsyncmemo:snapshot:v2")).toBeNull();
+    write.mockRestore();
+    expect((await new LocalStorageAdapter().load()).tasks[0].text).toBe("only local copy");
+  });
+
   it("copies v1 to v2 while retaining the recovery source", async () => {
     const legacy = JSON.stringify(createEmptySnapshot());
     browserStorage.setItem(STORAGE_KEY, legacy);
