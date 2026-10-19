@@ -3,6 +3,8 @@ import { createEmptySnapshot } from "../../storage/storageAdapter";
 import type { SyncContext } from "../syncTypes";
 import { revisionKey, type PendingRevision } from "../syncState";
 import { createPushPayload, mapTableRows, pushBatches, type SnapshotTransport } from "./snapshotIo";
+import { taskFromRow, taskToRow } from "./mappers";
+import { sameActionContent } from "../../../features/actions/actionModel";
 
 // Keep the matching confirmation GET below common URL limits for UUID keys.
 export const WRITE_BATCH_SIZE = 200;
@@ -26,6 +28,9 @@ export async function pushSnapshotChanges(
   const payload = createPushPayload(snapshot, context, now);
   const batches = pushBatches(payload);
   const pending = new Map(snapshot.syncState!.pending.map((item) => [revisionKey(item), item]));
+  // Device-only actions wait for explicit account adoption. They must not
+  // prevent unrelated account data from syncing in the meantime.
+  const localOnly = new Set(snapshot.tasks.filter(task => task.actionOwnerScope?.startsWith("local:")).map(task => task.id));
   const acknowledged: PendingRevision[] = [];
   let confirmed = { ...emptyIncomingSnapshot(), syncState: snapshot.syncState };
   let changedRows = 0;
@@ -42,8 +47,35 @@ export async function pushSnapshotChanges(
     if (deviceResult.error) throw deviceResult.error;
     changedRows++;
     confirmed.devices = [payload.currentDevice];
+    for (const item of pending.values()) {
+      if (item.collection !== "tasks") continue;
+      const task = snapshot.tasks.find(row => row.id === item.id);
+      if (localOnly.has(item.id)) continue;
+      if (task?.actionOwnerScope && task.actionOwnerScope !== context.userId) {
+        throw new Error("로컬 일정을 현재 계정으로 가져온 뒤 동기화해 주세요.");
+      }
+      if (item.operation !== "ENSURE_ACTION") continue;
+      if (!item.initialTask || !transport.ensureAction) throw new Error("일정 생성 API를 사용할 수 없습니다. DB 마이그레이션을 확인해 주세요.");
+      if (item.conflictTask) throw new Error("기존 일정과 다른 제안이 있습니다. 달력에서 검토해 주세요.");
+      const result = await transport.ensureAction(taskToRow(item.initialTask, context.userId));
+      if (result.error) throw result.error;
+      const row = result.data?.[0];
+      if (!row || row.id !== item.id || row.user_id !== context.userId ||
+          row.source_namespace !== item.initialTask.sourceNamespace || row.external_key !== item.initialTask.externalKey) {
+        throw new Error("일정의 서버 식별자를 확인하지 못했습니다.");
+      }
+      const remote = taskFromRow(row);
+      acknowledged.push({ ...item, confirmedTask: remote });
+      confirmed.tasks.push(remote);
+      changedRows++;
+      if (!sameActionContent(item.initialTask, remote) && (!task || !sameActionContent(task, remote))) {
+        throw new Error("기존 일정과 다른 제안을 보존했습니다. 달력에서 검토해 주세요.");
+      }
+    }
     for (const batch of batches) {
-      const rows = [...batch.rows].sort((a, b) => a.id.localeCompare(b.id));
+      const rows = batch.rows.filter(row => pending.get(batch.collection + ":" + row.id)?.operation !== "ENSURE_ACTION" &&
+        !(batch.collection === "tasks" && localOnly.has(row.id)))
+        .sort((a, b) => a.id.localeCompare(b.id));
       for (let offset = 0; offset < rows.length; offset += WRITE_BATCH_SIZE) {
         const chunk = rows.slice(offset, offset + WRITE_BATCH_SIZE);
         const written = await transport.upsertRows(batch.tableName, chunk, "id");

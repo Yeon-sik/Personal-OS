@@ -2,6 +2,7 @@ import type { LocalDataSnapshot } from "../../types";
 import { mergeAuthoritativeSnapshot, mergeSnapshot } from "./supabase/snapshotMerge";
 import { mergeEntities } from "./merge";
 import type { SyncResult } from "./syncTypes";
+import { sameActionContent } from "../../features/actions/actionModel";
 import { acknowledgeRevisions, revisionKey, sameScope, WRITE_COLLECTIONS, type PendingRevision } from "./syncState";
 
 function preservePending(
@@ -91,6 +92,28 @@ export function reconcilePush(
   if (incoming) assertSameScope(current, incoming);
   // Legacy/injected clients retain the previous authoritative merge contract.
   if (!acknowledged) return incoming ? mergeAuthoritativeSnapshot(current, incoming) : current;
+  if (current.syncState && acknowledged.some(item => item.confirmedTask)) {
+    const confirmations = new Map(acknowledged.filter(item => item.confirmedTask).map(item => [item.id, item]));
+    const completed: PendingRevision[] = acknowledged.filter(item => !item.confirmedTask);
+    const pending = current.syncState.pending.map(item => {
+      const confirmation = confirmations.get(item.id);
+      if (item.operation !== "ENSURE_ACTION" || !confirmation?.confirmedTask || !item.initialTask) return item;
+      const remote = confirmation.confirmedTask;
+      const task = current.tasks.find(row => row.id === item.id);
+      if (task && sameActionContent(task, remote)) {
+        completed.push(item);
+        return item;
+      }
+      if (sameActionContent(item.initialTask, remote)) {
+        // Creation is acknowledged, but a newer edit remains dirty.
+        const { operation: _operation, initialTask: _initial, conflictTask: _conflict, ...revision } = item;
+        return revision;
+      }
+      return { ...item, conflictTask: remote };
+    });
+    current = { ...current, syncState: { ...current.syncState, pending } };
+    acknowledged = completed;
+  }
   const next = incoming ? mergeAuthoritativeSnapshot(current, preservePending(current, incoming, acknowledged)) : current;
   return { ...next, syncState: current.syncState && acknowledgeRevisions(current.syncState, acknowledged) };
 }

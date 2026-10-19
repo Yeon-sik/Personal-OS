@@ -23,8 +23,11 @@ import type { DateRecords } from "../recordAggregation";
 import { formatRecordTime, formatTaskDueLabel } from "../recordDisplayFormatters";
 import { DailyItem, DailySection, DeleteItemButton } from "./DailyRecordSection";
 import { MarkerLegend } from "./RecordMarkerLegend";
+import { actionRolesOnDate, ROLE_LABELS } from "../../actions/actionCalendar";
+import { ActionSummary } from "../../actions/ActionSummary";
 
 interface SelectedDateRecordsProps {
+  onOpenTask?: (taskId: string) => void;
   onDeleteNote: (noteId: string) => void;
   onDeleteTask: (taskId: string) => void;
   onOpenBackfillAction: (sourceElement: HTMLElement) => void;
@@ -109,6 +112,7 @@ function ReadOnlyWeight({ record }: { record: WeightRecord }) {
 }
 
 export function SelectedDateRecords({
+  onOpenTask,
   onDeleteNote,
   onDeleteTask,
   onOpenBackfillAction,
@@ -217,6 +221,7 @@ export function SelectedDateRecords({
                 <input
                   type="checkbox"
                   checked={task.isDone}
+                  disabled={task.registrationState === "CANDIDATE"}
                   onChange={() => onToggleTask(task.id)}
                   className="h-4 w-4 shrink-0 rounded border-slate-300 text-teal-700"
                   aria-label="할 일 완료 전환"
@@ -228,12 +233,14 @@ export function SelectedDateRecords({
                       : "min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-neutral-100"
                   }
                 >
-                  {task.text}
+                  {onOpenTask ? <button type="button" onClick={() => onOpenTask(task.id)} className="min-h-11 w-full whitespace-normal break-words text-left underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2">{task.text}</button> : task.text}
                 </div>
               </div>
               <div className="mt-1 text-xs text-slate-500 dark:text-neutral-400">
                 {task.isDone ? "완료" : formatTaskDueLabel(task)}
               </div>
+              <p className="mt-1 text-xs font-semibold text-teal-800 dark:text-teal-300">{actionRolesOnDate(task, selectedDate).map(role => ROLE_LABELS[role]).join(" · ")}</p>
+              <ActionSummary task={task} />
               <BackfillBadge record={task} />
             </DailyItem>
           ))}

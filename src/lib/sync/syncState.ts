@@ -1,4 +1,4 @@
-import type { LocalDataSnapshot, SyncableEntity } from "../../types";
+import type { LocalDataSnapshot, SyncableEntity, Task } from "../../types";
 
 // This order also preserves the existing parent -> child write contract.
 export const WRITE_COLLECTIONS = [
@@ -30,6 +30,11 @@ export interface PendingRevision {
   collection: WritableCollection;
   id: string;
   revision: number;
+  operation?: "ENSURE_ACTION";
+  initialTask?: Task;
+  conflictTask?: Task;
+  /** Response-only metadata; consumed by reconciliation before persistence. */
+  confirmedTask?: Task;
 }
 
 export interface SyncCursor {
@@ -87,7 +92,7 @@ export function trackLocalChanges(
 ): LocalDataSnapshot {
   if (current === next) return current;
   const initialized = initializeSyncState(current, null, deviceId);
-  const state = initialized.syncState!;
+  const state = next.syncState && next.syncState !== current.syncState ? next.syncState : initialized.syncState!;
   const pending = new Map(state.pending.map((item) => [revisionKey(item), item]));
   let nextRevision = state.nextRevision;
   for (const [collection] of WRITE_COLLECTIONS) {
@@ -97,7 +102,12 @@ export function trackLocalChanges(
       const previous = before.get(row.id);
       if (previous !== row && JSON.stringify(previous) !== JSON.stringify(row)) {
         if (nextRevision === Number.MAX_SAFE_INTEGER) throw new Error("로컬 동기화 revision 한도를 초과했습니다.");
-        const item = { collection, id: row.id, revision: ++nextRevision };
+        const previousPending = pending.get(collection + ":" + row.id);
+        const item: PendingRevision = { ...previousPending, collection, id: row.id, revision: ++nextRevision };
+        if (collection === "tasks" && !previous && (row as Task).externalKey) {
+          item.operation = "ENSURE_ACTION";
+          item.initialTask = row as Task;
+        }
         pending.set(revisionKey(item), item);
       }
     }
@@ -129,7 +139,10 @@ export function parseSyncState(value: unknown): LocalSyncState | undefined {
       (state.cursor !== null && (!state.scope || !state.cursor || typeof state.cursor.epoch !== "string" ||
         !state.cursor.epoch || typeof state.cursor.revision !== "string" || !/^\d+$/.test(state.cursor.revision))) ||
       state.pending.some((item) => !item || !collections.has(item.collection) || typeof item.id !== "string" || !item.id ||
-        !Number.isSafeInteger(item.revision) || item.revision < 1 || item.revision > state.nextRevision) ||
+        !Number.isSafeInteger(item.revision) || item.revision < 1 || item.revision > state.nextRevision ||
+        (item.operation !== undefined && (item.operation !== "ENSURE_ACTION" || item.collection !== "tasks" ||
+          !item.initialTask || item.initialTask.id !== item.id || !item.initialTask.externalKey ||
+          !item.initialTask.sourceNamespace))) ||
       new Set(state.pending.map(revisionKey)).size !== state.pending.length) {
     throw new Error("저장된 동기화 대기열을 읽을 수 없습니다.");
   }

@@ -46,6 +46,30 @@ beforeEach(() => {
 });
 
 describe("LocalStorageAdapter", () => {
+  it("copies v1 to v2 while retaining the recovery source", async () => {
+    const legacy = JSON.stringify(createEmptySnapshot());
+    browserStorage.setItem(STORAGE_KEY, legacy);
+    await new LocalStorageAdapter().load();
+    expect(browserStorage.getItem(STORAGE_KEY)).toBe(legacy);
+    expect(JSON.parse(browserStorage.getItem("localsyncmemo:snapshot:v2")!).version).toBe(2);
+  });
+
+  it("refuses a stale writer instead of replacing another window's data", async () => {
+    const first = new LocalStorageAdapter(), second = new LocalStorageAdapter();
+    await first.load(); await second.load();
+    const changed = { ...createEmptySnapshot(), devices: [{ id: "new", name: "saved", lastSeenAt: "2026-10-18", appVersion: null }] };
+    await first.save(changed);
+    await expect(second.save(createEmptySnapshot())).rejects.toThrow("다른 창");
+    expect((await new LocalStorageAdapter().load()).devices[0].id).toBe("new");
+  });
+
+  it("never falls back to old v1 after a damaged v2 exists", async () => {
+    browserStorage.setItem(STORAGE_KEY, JSON.stringify(createEmptySnapshot()));
+    browserStorage.setItem("localsyncmemo:snapshot:v2", "broken");
+    await expect(new LocalStorageAdapter().load()).rejects.toThrow("기존 데이터는 지우지 말고");
+    expect(browserStorage.getItem("localsyncmemo:snapshot:v2")).toBe("broken");
+  });
+
   it("normalizes legacy snapshots without losing sync audit fields", async () => {
     const updatedAt = "2026-07-31T10:00:00.000Z";
     browserStorage.setItem(
@@ -259,11 +283,11 @@ describe("LocalStorageAdapter", () => {
 
     await adapter.save(snapshot);
 
-    const stored = JSON.parse(browserStorage.getItem(STORAGE_KEY) ?? "{}") as {
+    const stored = JSON.parse(browserStorage.getItem("localsyncmemo:snapshot:v2") ?? "{}") as {
       version?: number;
       snapshot?: LocalDataSnapshot;
     };
-    expect(stored.version).toBe(1);
+    expect(stored.version).toBe(2);
     expect(stored.snapshot).toEqual(snapshot);
     expect(await adapter.load()).toEqual(snapshot);
   });
@@ -272,7 +296,7 @@ describe("LocalStorageAdapter", () => {
     browserStorage.setItem(STORAGE_KEY, "{not-json");
 
     await expect(new LocalStorageAdapter().load()).rejects.toThrow(
-      "저장된 로컬 데이터를 읽을 수 없습니다.",
+      "기존 데이터는 지우지 말고",
     );
   });
 });

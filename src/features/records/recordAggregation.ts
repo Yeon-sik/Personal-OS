@@ -12,6 +12,8 @@ import {
 } from "../../lib/dataTrust/backfillMetadata";
 import { formatLocalDate, isWithinDateRange, parseDateInput } from "../fitness/fitnessDate";
 import { getVisibleSharedWorkouts, type SharedWorkoutSummary } from "../fitness-summary/sharedWorkoutSummaries";
+import { actionRolesOnDate, actionDatesInRange } from "../actions/actionCalendar";
+import { calendarDate } from "../actions/actionTime";
 
 export type LocalDateString = string;
 
@@ -26,6 +28,10 @@ export interface CalendarTaskMarker {
   plannedCount: number;
   completedPlannedCount: number;
   allPlannedDone: boolean;
+  confirmedCount?: number;
+  candidateCount?: number;
+  eventCount?: number;
+  windowCount?: number;
 }
 
 export interface CalendarMarkerSet {
@@ -112,43 +118,11 @@ function getTaskActivityDate(task: Task): LocalDateString | null {
 }
 
 function getTaskProductivityDate(task: Task): LocalDateString | null {
-  return task.plannedDate;
-}
-
-function getTaskVisibleRange(
-  task: Task,
-): { startDate: LocalDateString; endDate: LocalDateString } | null {
-  const createdDate = toLocalDateFromTimestamp(task.createdAt);
-  const dueDate = task.dueDate;
-
-  if (!createdDate) {
-    return dueDate ? { startDate: dueDate, endDate: dueDate } : null;
-  }
-
-  if (!dueDate) {
-    return { startDate: createdDate, endDate: createdDate };
-  }
-
-  const updatedDate = toLocalDateFromTimestamp(task.updatedAt);
-  const endDate =
-    task.isDone && updatedDate && updatedDate.localeCompare(dueDate) < 0
-      ? updatedDate
-      : dueDate;
-
-  return createdDate.localeCompare(endDate) <= 0
-    ? { startDate: createdDate, endDate }
-    : { startDate: endDate, endDate };
+  return task.registrationState === "CANDIDATE" || (task.plannedDate && task.plannedDate > calendarDate()) ? null : task.plannedDate;
 }
 
 function isTaskVisibleOnDate(task: Task, date: LocalDateString): boolean {
-  const visibleRange = getTaskVisibleRange(task);
-
-  return (
-    task.plannedDate === date ||
-    (visibleRange
-      ? isWithinDateRange(date, visibleRange.startDate, visibleRange.endDate)
-      : false)
-  );
+  return actionRolesOnDate(task, date).length > 0;
 }
 
 function isDateInRange(date: string | null, range: DateRange): boolean {
@@ -386,41 +360,21 @@ export function getCalendarMarkers(
   }
 
   for (const task of snapshot.tasks.filter(isVisibleEntity)) {
-    if (isDateInRange(task.plannedDate, range)) {
-      const taskMarker = ensureMarker(markers, task.plannedDate as LocalDateString).tasks;
-      taskMarker.plannedCount += 1;
-
-      if (task.isDone) {
-        taskMarker.completedPlannedCount += 1;
+    for (const { date, roles } of actionDatesInRange(task, range.startDate, range.endDate)) {
+      const marker = ensureMarker(markers, date).tasks;
+      if (task.registrationState === "CANDIDATE") {
+        marker.candidateCount = (marker.candidateCount ?? 0) + 1;
+        continue;
       }
-    }
-
-    const visibleRange = getTaskVisibleRange(task);
-
-    if (!visibleRange) {
-      continue;
-    }
-
-    const startDate =
-      visibleRange.startDate.localeCompare(range.startDate) < 0
-        ? range.startDate
-        : visibleRange.startDate;
-    const endDate =
-      visibleRange.endDate.localeCompare(range.endDate) > 0
-        ? range.endDate
-        : visibleRange.endDate;
-
-    if (startDate.localeCompare(endDate) > 0) {
-      continue;
-    }
-
-    for (const date of getDateRangeDays({ startDate, endDate })) {
-      const taskMarker = ensureMarker(markers, date).tasks;
-      taskMarker.activeCount += 1;
-
-      if (task.dueDate === date) {
-        taskMarker.dueCount += 1;
+      marker.confirmedCount = (marker.confirmedCount ?? 0) + 1;
+      marker.activeCount++;
+      if (roles.includes("PLAN")) {
+        marker.plannedCount++;
+        if (task.isDone) marker.completedPlannedCount++;
       }
+      if (roles.includes("DEADLINE")) marker.dueCount++;
+      if (roles.includes("EVENT")) marker.eventCount = (marker.eventCount ?? 0) + 1;
+      if (roles.includes("WINDOW")) marker.windowCount = (marker.windowCount ?? 0) + 1;
     }
   }
 

@@ -1,0 +1,22 @@
+[
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "C:\\Github\\personal-os\\PersonalOSApp\\src\\features\\records\\RecordCalendar.tsx",
+    "line": 256,
+    "snippet": "text-slate-800 on bg-teal-50"
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "C:\\Github\\personal-os\\PersonalOSApp\\src\\features\\records\\RecordCalendar.tsx",
+    "line": 256,
+    "snippet": "text-neutral-200 on bg-teal-50"
+  }
+]

@@ -5,7 +5,7 @@ import { createId } from "../../lib/storage/id";
 // UI에는 soft delete 되지 않은 항목만 orderIndex 순서로 보여준다.
 export function getVisibleTasks(tasks: Task[]): Task[] {
   return tasks
-    .filter((task) => task.deletedAt === null)
+    .filter((task) => task.deletedAt === null && task.registrationState !== "CANDIDATE")
     .sort((first, second) => {
       if (first.orderIndex !== second.orderIndex) {
         return first.orderIndex - second.orderIndex;
@@ -63,17 +63,21 @@ export function updateTask(
   >,
   deviceId: string,
 ): Task {
+  if (task.registrationState === "CANDIDATE" && changes.isDone) return task;
+  const evidenceChanged = task.sourceType === "EXTERNAL_NOTICE" &&
+    (["text", "dueDate", "dueTime"] as const).some(key => changes[key] !== undefined && changes[key] !== task[key]);
   return {
     ...task,
     ...changes,
-    updatedAt: new Date().toISOString(),
+    ...(evidenceChanged ? { verificationStatus: "UNVERIFIED" as const, sourceCheckedAt: null, sourceCheckedBy: null } : {}),
+    updatedAt: new Date(Math.max(Date.now(), Date.parse(task.updatedAt) + 1)).toISOString(),
     deviceId,
   };
 }
 
 // 삭제 상태도 Supabase에 upsert하기 위해 tombstone으로 남긴다.
 export function softDeleteTask(task: Task, deviceId: string): Task {
-  const now = new Date().toISOString();
+  const now = new Date(Math.max(Date.now(), Date.parse(task.updatedAt) + 1)).toISOString();
 
   return {
     ...task,
