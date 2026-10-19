@@ -45,6 +45,17 @@ describe("durable action commands", () => {
     expect(h.current().tasks[0]).toEqual(remote);
     expect(h.current().syncState!.pending).toHaveLength(0);
   });
+  it("preserves an offline tombstone when the user chooses the local side of an ordinary Task conflict", async () => {
+    const [task] = await prepareImport([{ task: parseActionImport(ACTION_IMPORT_EXAMPLE).items[0].task!, state: "CONFIRMED", independent: false }], "owner", device.id);
+    const deleted = { ...task, deletedAt: "2026-10-18T00:00:00Z" };
+    const state = initializeSyncState({ ...createEmptySnapshot(), tasks: [deleted] }, scope, device.id);
+    state.syncState!.pending[0].conflictTask = { ...task, text: "서버 내용" };
+    const h = harness(state);
+    await h.actions.resolveActionConflict(task.id, true);
+    expect(h.current().tasks[0].deletedAt).toBe(deleted.deletedAt);
+    expect(h.current().syncState!.pending[0].operation).toBeUndefined();
+    expect(h.current().syncState!.pending[0].conflictTask).toBeUndefined();
+  });
   it("adopts local-only external IDs and their pending intent together", async () => {
     const [task] = await prepareImport([{ task: parseActionImport(ACTION_IMPORT_EXAMPLE).items[0].task!, state: "CONFIRMED", independent: false }], "local:device-a", device.id);
     const base = initializeSyncState(createEmptySnapshot(), scope, device.id);

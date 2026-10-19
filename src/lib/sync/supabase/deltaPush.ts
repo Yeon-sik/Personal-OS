@@ -54,9 +54,9 @@ export async function pushSnapshotChanges(
       if (task?.actionOwnerScope && task.actionOwnerScope !== context.userId) {
         throw new Error("로컬 일정을 현재 계정으로 가져온 뒤 동기화해 주세요.");
       }
+      if (item.conflictTask) throw new Error("기존 일정과 다른 제안이 있습니다. 달력에서 검토해 주세요.");
       if (item.operation !== "ENSURE_ACTION") continue;
       if (!item.initialTask || !transport.ensureAction) throw new Error("일정 생성 API를 사용할 수 없습니다. DB 마이그레이션을 확인해 주세요.");
-      if (item.conflictTask) throw new Error("기존 일정과 다른 제안이 있습니다. 달력에서 검토해 주세요.");
       const result = await transport.ensureAction(taskToRow(item.initialTask, context.userId));
       if (result.error) throw result.error;
       const row = result.data?.[0];
@@ -96,8 +96,19 @@ export async function pushSnapshotChanges(
         })) throw new Error(`${batch.tableName}: 전송한 행의 서버 확정값을 확인하지 못했습니다.`);
         const mapped = mapTableRows(batch.tableName, chunk.map((row) => byId.get(row.id)!));
         confirmed = { ...confirmed, [batch.collection]: [...confirmed[batch.collection], ...mapped[batch.collection]!] };
-        acknowledged.push(...chunk.map((row) => pending.get(`${batch.collection}:${row.id}`)!));
+        // A newer Task timestamp can be ownership-migration metadata rather
+        // than a newer user edit. Preserve both versions for existing review
+        // instead of acknowledging away a different offline Task silently.
+        const remoteTasks = new Map((mapped.tasks ?? []).map(task => [task.id, task]));
+        acknowledged.push(...chunk.map((row) => ({
+          ...pending.get(`${batch.collection}:${row.id}`)!,
+          ...(batch.collection === "tasks" ? { confirmedTask: remoteTasks.get(row.id)! } : {}),
+        })));
         changedRows += chunk.length;
+        if (batch.collection === "tasks" && chunk.some(row => {
+          const local = snapshot.tasks.find(task => task.id === row.id)!;
+          return !sameActionContent(local, remoteTasks.get(row.id)!);
+        })) throw new Error("기존 일정과 다른 제안을 보존했습니다. 달력에서 검토해 주세요.");
       }
     }
   } catch (caught) {

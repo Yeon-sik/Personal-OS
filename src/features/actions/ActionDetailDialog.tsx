@@ -52,7 +52,7 @@ export function ActionDetailDialog({ task, proposal, pending, actions, onClose, 
         <ActionSummary task={pending.conflictTask} />
         <div className="flex flex-wrap gap-2">
           <button type="button" disabled={busy} className={actionButtonClass} onClick={() => void run(async () => { await actions.resolveActionConflict(task.id, false); await onSync?.(); }, "서버 내용을 선택했습니다. 창을 닫고 최신 일정을 확인하세요.")}>서버 내용 유지</button>
-          <button type="button" disabled={busy} className={actionButtonClass} onClick={() => void run(async () => { await actions.resolveActionConflict(task.id, true); await onSync?.(); }, "내 내용을 적용했습니다. 동기화 상태를 확인하세요.")}>{pending.conflictTask.deletedAt ? "복원해서 내 내용 적용" : "내 내용 적용"}</button>
+          <button type="button" disabled={busy} className={actionButtonClass} onClick={() => void run(async () => { await actions.resolveActionConflict(task.id, true); await onSync?.(); }, "내 내용을 적용했습니다. 동기화 상태를 확인하세요.")}>{task.deletedAt ? "내 삭제 유지" : pending.conflictTask.deletedAt ? "복원해서 내 내용 적용" : "내 내용 적용"}</button>
         </div>
       </section>}
       {proposal && <section className="space-y-3 rounded-md border border-amber-400 p-3">

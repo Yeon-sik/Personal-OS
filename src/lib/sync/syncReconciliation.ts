@@ -97,14 +97,18 @@ export function reconcilePush(
     const completed: PendingRevision[] = acknowledged.filter(item => !item.confirmedTask);
     const pending = current.syncState.pending.map(item => {
       const confirmation = confirmations.get(item.id);
-      if (item.operation !== "ENSURE_ACTION" || !confirmation?.confirmedTask || !item.initialTask) return item;
+      if (item.collection !== "tasks" || !confirmation?.confirmedTask) return item;
       const remote = confirmation.confirmedTask;
       const task = current.tasks.find(row => row.id === item.id);
-      if (task && sameActionContent(task, remote)) {
+      if (item.operation !== "ENSURE_ACTION" && item.revision !== confirmation.revision) {
+        completed.push(confirmation);
+        return item;
+      }
+      if (item.revision === confirmation.revision && task && sameActionContent(task, remote)) {
         completed.push(item);
         return item;
       }
-      if (sameActionContent(item.initialTask, remote)) {
+      if (item.operation === "ENSURE_ACTION" && item.initialTask && sameActionContent(item.initialTask, remote)) {
         // Creation is acknowledged, but a newer edit remains dirty.
         const { operation: _operation, initialTask: _initial, conflictTask: _conflict, ...revision } = item;
         return revision;

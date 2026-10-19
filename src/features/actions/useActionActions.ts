@@ -58,7 +58,7 @@ export function useActionActions({ snapshot, device, userId, isAuthenticated, co
       const remote = pending.conflictTask;
       if (remote.id !== local.id) throw new Error("일정 식별자가 달라 자동 처리할 수 없습니다. 원본을 보존하고 동기화 상태를 확인해 주세요.");
       const task: Task = keepLocal ? {
-        ...local, deletedAt: null, deviceId: device.id,
+        ...local, deviceId: device.id,
         updatedAt: nextTaskTimestamp(remote.updatedAt > local.updatedAt ? remote.updatedAt : local.updatedAt),
         ...(local.sourceType === "EXTERNAL_NOTICE" ? { verificationStatus: "UNVERIFIED" as const, sourceCheckedAt: null, sourceCheckedBy: null } : {}),
       } : remote;
