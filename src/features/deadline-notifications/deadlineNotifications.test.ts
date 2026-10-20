@@ -96,6 +96,23 @@ describe("derived deadline notification planner", () => {
 });
 
 describe("OS scheduler ownership, crash recovery and device boundaries", () => {
+  it("replaces legacy native payloads once while preserving owned IDs and unrelated notifications", async () => {
+    const h = harness();
+    h.native.set(99, { id: 99, title: "another feature" });
+    await h.scheduler.reconcile([task], settings, "a", "2026-12-31T00:00:00Z");
+    const legacy = h.storage.loadOwned().map(({ nativeRevision: _revision, ...row }) => row);
+    h.storage.saveOwned(legacy);
+    const restarted = new DeadlineScheduler(h.transport, h.storage);
+    await restarted.reconcile([task], settings, "a", "2026-12-31T00:00:00Z");
+    expect(h.storage.loadOwned().map(row => row.id)).toEqual(legacy.map(row => row.id));
+    expect(h.storage.loadOwned().every(row => row.nativeRevision === 2 && row.applied)).toBe(true);
+    expect(h.transport.cancel).toHaveBeenCalledTimes(4);
+    expect(h.transport.cancel).not.toHaveBeenCalledWith([99]);
+    expect(h.native.get(99)?.title).toBe("another feature");
+    await restarted.reconcile([task], settings, "a", "2026-12-31T00:00:00Z");
+    expect(h.transport.schedule).toHaveBeenCalledTimes(8);
+    expect(h.transport.cancel).toHaveBeenCalledTimes(4);
+  });
   it("restores persistent ownership after restart without duplicate native scheduling", async () => {
     const h = harness();
     await h.scheduler.reconcile([task], settings, "a", "2026-12-31T00:00:00Z");

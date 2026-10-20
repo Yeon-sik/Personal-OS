@@ -20,8 +20,10 @@ export function createTauriDeadlineTransport(): DeadlineTransport {
       const options = {
         id: notification.id, title: notification.title, body: notification.body,
         schedule: Schedule.at(new Date(notification.at), false, true),
-        extra: { personalOsDeadlineKey: notification.key },
       };
+      // 2.3.3's alarm receiver reads sourceJson with a plain ObjectMapper.
+      // A JSObject extra map crashes there even though batch/pending succeeded.
+      // Ownership stays in our local journal; persist only native-safe fields.
       // In pinned 2.3.3, show/notify schedules but does not append to the mobile
       // pending store. batch does, and expects sourceJson for storage/readback.
       // Await it and verify pending() instead of treating sendNotification(void)

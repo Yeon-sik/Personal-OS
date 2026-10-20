@@ -27,7 +27,8 @@ export class DeadlineStorage {
     if (value.version !== 1 || !Array.isArray(value.owned) || value.owned.some(row => !row ||
       !Number.isInteger(row.id) || row.id < 1 || row.id > 2147483647 ||
       [row.key,row.taskId,row.fireDate,row.at,row.title,row.body].some(field => typeof field !== "string") ||
-      !Number.isFinite(Date.parse(row.at)) || typeof row.applied !== "boolean") ||
+      !Number.isFinite(Date.parse(row.at)) || typeof row.applied !== "boolean" ||
+      (row.nativeRevision !== undefined && row.nativeRevision !== 2)) ||
       new Set(value.owned.map(row => row.id)).size !== value.owned.length ||
       new Set(value.owned.map(row => row.key)).size !== value.owned.length) {
       throw new Error("알림 예약 소유권 기록을 읽지 못했습니다. 다른 알림 보호를 위해 예약을 중단했습니다.");

@@ -27,8 +27,9 @@ describe("Android native notification transport", () => {
     const row = args.notifications[0];
     const stored = JSON.parse(row.sourceJson);
     expect(stored).toMatchObject({ id: 42, title: notification.title, body: notification.body,
-      extra: { personalOsDeadlineKey: "owned-key" },
       schedule: { at: { date: new Date(notification.at).toISOString(), repeating: false, allowWhileIdle: true } } });
+    expect(stored).not.toHaveProperty("extra");
+    expect(row).not.toHaveProperty("extra");
   });
   it("propagates native scheduling rejection for journal recovery", async () => {
     native.invoke.mockRejectedValueOnce(new Error("native unavailable"));

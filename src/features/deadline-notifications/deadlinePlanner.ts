@@ -17,6 +17,8 @@ export interface OwnedDeadlineNotification {
   body: string;
   /** False is a durable reservation written before calling the OS. */
   applied: boolean;
+  /** Missing on legacy reservations whose native extra payload must be replaced. */
+  nativeRevision?: 2;
 }
 export interface DeadlinePlan {
   add: OwnedDeadlineNotification[];
@@ -48,7 +50,7 @@ export function effectiveDeadline(task: Task, fallbackZone: string) {
   return { day, timeZone, instant: wallTime(day, clock || "23:59:59.999", timeZone).toInstant() };
 }
 function sameSchedule(a: OwnedDeadlineNotification, b: OwnedDeadlineNotification) {
-  return a.key === b.key && a.at === b.at && a.title === b.title && a.body === b.body;
+  return a.key === b.key && a.at === b.at && a.title === b.title && a.body === b.body && a.nativeRevision === b.nativeRevision;
 }
 
 /** Pure planner. D-4 has no delivery today, but may reserve future D-3..D-day. */
@@ -93,7 +95,7 @@ export function reconcileDeadlineNotifications(
       while (occupied.has(id)) id = id === 2147483647 ? 1 : id + 1;
     }
     occupied.add(id);
-    const next = { ...draft, id, applied: false };
+    const next = { ...draft, id, applied: false, nativeRevision: 2 as const };
     if (old?.applied && sameSchedule(old, next)) unchanged.push(old);
     else { if (old) cancel.push(old); add.push(next); }
   }
