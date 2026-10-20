@@ -1,6 +1,7 @@
 use std::{collections::HashMap, env, fs, path::PathBuf, sync::Mutex};
 
 mod db_editor;
+mod deadline_alarm;
 mod github;
 mod knowledge_vault;
 mod project_workspace;
@@ -358,10 +359,14 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(deadline_alarm::init())
         .manage(Mutex::new(QuickCaptureShortcutStatus::unsupported()))
         .manage(github::GitHubState::default())
         .invoke_handler(tauri::generate_handler![
             load_runtime_config,
+            deadline_alarm::deadline_exact_alarm_status,
+            deadline_alarm::deadline_open_exact_alarm_settings,
             load_persisted_device,
             save_persisted_device,
             quick_capture_shortcut_status,

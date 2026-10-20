@@ -15,6 +15,8 @@ import { SupabaseSettingsSection } from "./settings/SupabaseSettingsSection";
 import { DbEditorLauncher } from "../features/db-editor/DbEditorLauncher";
 import type { KnowledgeVaultRuntime } from "../features/knowledge-vault/useKnowledgeVaultRuntime";
 import { KnowledgeVaultSettingsSection } from "./settings/KnowledgeVaultSettingsSection";
+import { DeadlineNotificationSettingsSection } from "./settings/DeadlineNotificationSettingsSection";
+import type { DeadlineNotificationsRuntime } from "../features/deadline-notifications/useDeadlineNotifications";
 
 interface SettingsPanelProps {
   activeDevices: Device[];
@@ -41,6 +43,7 @@ interface SettingsPanelProps {
   onSaveQuickCaptureShortcutPreference: (shortcut: string) => void;
   onToggleAutostart: (enabled: boolean) => Promise<void>;
   knowledgeVault: KnowledgeVaultRuntime;
+  deadlineNotifications: DeadlineNotificationsRuntime;
 }
 
 export function SettingsPanel({
@@ -68,6 +71,7 @@ export function SettingsPanel({
   onSaveQuickCaptureShortcutPreference,
   onToggleAutostart,
   knowledgeVault,
+  deadlineNotifications,
 }: SettingsPanelProps) {
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-slate-300 bg-white dark:border-neutral-800 dark:bg-black">
@@ -84,6 +88,7 @@ export function SettingsPanel({
           themeMode={themeMode}
           onChangeThemeMode={onChangeThemeMode}
         />
+        <DeadlineNotificationSettingsSection notifications={deadlineNotifications} />
         <DbEditorLauncher />
         <KnowledgeVaultSettingsSection vault={knowledgeVault} />
         <SupabaseSettingsSection

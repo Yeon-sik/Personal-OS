@@ -6,6 +6,8 @@ $buildLog = Join-Path $projectRoot "src-tauri\target\android-arm64-build.log"
 
 Push-Location $projectRoot
 try {
+    & node (Join-Path $PSScriptRoot "prepare-android-deadline.mjs") --android
+    if ($LASTEXITCODE -ne 0) { throw "Android deadline permission bridge preparation failed." }
     # The CLI compiles Rust with Tauri's embedded production frontend first.
     # Windows PowerShell 5 treats native stderr as ErrorRecord; decide success
     # from the process exit code, not Tauri's informational stderr output.

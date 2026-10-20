@@ -23,6 +23,7 @@ import {
 import { useLocalSyncMemo } from "./useLocalSyncMemo";
 import { useThemeMode } from "./useThemeMode";
 import { APP_TAB_LABELS, type AppTab, type RecordSection } from "./navigation";
+import { useDeadlineNotifications } from "../features/deadline-notifications/useDeadlineNotifications";
 
 export function App() {
   const memo = useLocalSyncMemo();
@@ -129,6 +130,9 @@ export function App() {
     ],
   );
 
+  const deadlineNotifications = useDeadlineNotifications(snapshot.tasks, memo.isReady,
+    JSON.stringify(snapshot.syncState?.scope || { backend: memo.supabaseConfig?.supabaseUrl || "local", userId: memo.userId || "local" }));
+
   function openRecords(section: RecordSection = "all", date?: string) {
     setRecordSection(section);
     if (date) setSelectedDate(date);
@@ -159,6 +163,7 @@ export function App() {
               />
             ) : activeView === "settings" ? (
               <SettingsPanel
+                deadlineNotifications={deadlineNotifications}
                 activeDevices={memo.activeDevices}
                 authEmail={memo.authEmail}
                 autostartEnabled={memo.autostartEnabled}
