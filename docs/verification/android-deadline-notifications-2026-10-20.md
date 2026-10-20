@@ -1,5 +1,7 @@
 # Android local deadline notification 검증 — 2026-10-20
 
+> **후속 실기기 결과:** 아래는 최초 구현 시점의 기록이다. 이 APK는 Galaxy A25에서 실제 예약 발송 시 receiver crash가 재현됐다. `ff54ea4`에서 payload 호환성을 수정하고 업데이트·실제 알림 도착·예약 변경을 재검증했다. 최신 결과와 산출물은 [Galaxy A25 실기기 검증 보고서](android-deadline-a25-device-qa-2026-10-20.md)를 따른다. 아래 최초 APK를 배포하지 않는다.
+
 ## 범위와 판정
 
 - Baseline: `cffe89df6106eb38a935a4fc938cca22f02fd43b`.
