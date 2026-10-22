@@ -101,7 +101,7 @@ describe("HomePanel entry points", () => {
     act(() => renderer.unmount());
   });
 
-  it("summarizes only today's planned tasks while preserving wider calendar visibility", () => {
+  it("summarizes today's plans and excludes unrelated dates from calendar details", () => {
     const snapshot = emptySnapshot();
     snapshot.tasks = [
       task({ id: "today", text: "오늘 계획한 일" }),
@@ -110,8 +110,9 @@ describe("HomePanel entry points", () => {
       task({ id: "unscheduled", text: "계획 없는 새 일", createdAt: "2026-10-02T00:00:00.000Z", plannedDate: null, dueDate: null }),
       task({ id: "future-due", text: "미래 마감일인 일", createdAt: "2026-09-30T00:00:00.000Z", plannedDate: null, dueDate: "2026-10-05" }),
       task({ id: "done-unscheduled", text: "계획 없는 완료 일", createdAt: "2026-10-02T00:00:00.000Z", plannedDate: null, dueDate: null, isDone: true }),
+      task({ id: "candidate", text: "미확정 후보", registrationState: "CANDIDATE" }),
     ];
-    expect(getRecordsForDate(snapshot, "2026-10-02").tasks).toHaveLength(6);
+    expect(getRecordsForDate(snapshot, "2026-10-02").tasks.map(item => item.id)).toEqual(["today", "today-done", "candidate"]);
     let renderer!: ReactTestRenderer;
     act(() => {
       renderer = create(<HomePanel snapshot={snapshot} syncStatus={{ mode: "local-only", label: "Local only", detail: "", isOnline: false, lastSyncedAt: null, isConfigured: false }} today="2026-10-02" onOpenRecords={vi.fn()} onOpenProjects={vi.fn()} onQuickCapture={vi.fn()} />);

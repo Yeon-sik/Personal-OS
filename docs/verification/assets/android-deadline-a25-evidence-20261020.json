@@ -1,0 +1,247 @@
+{
+  "sourceCommit": "ff54ea4d3586820e7fed253699a7caec00d4eb84",
+  "date": "2026-10-20",
+  "timeZone": "Asia/Seoul",
+  "device": "Galaxy A25 / SM-A256N / Android 16",
+  "package": "com.yeonsik.note",
+  "scope": "Local-only QA fixtures; not authenticated cross-device sync",
+  "upgradeFingerprintChecks": [
+    {
+      "before": 14,
+      "differences": 0,
+      "after": 14,
+      "stage": "initial notification APK"
+    },
+    {
+      "before": 14,
+      "differences": 0,
+      "after": 14,
+      "stage": "fixed receiver APK"
+    }
+  ],
+  "phases": [
+    {
+      "phase": "payload-upgraded",
+      "deviceTime": "2026-10-20T21:50:26+09:00",
+      "qaNativeCount": 6,
+      "osAlarmCount": 6,
+      "mutationCount": 0,
+      "mutation": []
+    },
+    {
+      "phase": "delivery-retry-scheduled",
+      "deviceTime": "2026-10-20T21:51:21+09:00",
+      "qaNativeCount": 10,
+      "osAlarmCount": 10,
+      "mutationCount": 0,
+      "mutation": []
+    },
+    {
+      "phase": "restored",
+      "deviceTime": "2026-10-20T21:53:01+09:00",
+      "qaNativeCount": 14,
+      "osAlarmCount": 14,
+      "mutationCount": 4,
+      "mutation": [
+        {
+          "id": 1926232231,
+          "title": "Personal OS · D-day",
+          "at": "2026-10-25T12:55:00Z"
+        },
+        {
+          "id": 1746728700,
+          "title": "Personal OS · D-3",
+          "at": "2026-10-22T12:55:00Z"
+        },
+        {
+          "id": 363588623,
+          "title": "Personal OS · D-2",
+          "at": "2026-10-23T12:55:00Z"
+        },
+        {
+          "id": 110292494,
+          "title": "Personal OS · D-1",
+          "at": "2026-10-24T12:55:00Z"
+        }
+      ]
+    },
+    {
+      "phase": "fixed-after-delivery",
+      "deviceTime": "2026-10-20T21:55:40+09:00",
+      "qaNativeCount": 10,
+      "osAlarmCount": 10,
+      "mutationCount": 4,
+      "mutation": [
+        {
+          "id": 1926232231,
+          "title": "Personal OS · D-day",
+          "at": "2026-10-25T12:55:00Z"
+        },
+        {
+          "id": 1746728700,
+          "title": "Personal OS · D-3",
+          "at": "2026-10-22T12:55:00Z"
+        },
+        {
+          "id": 363588623,
+          "title": "Personal OS · D-2",
+          "at": "2026-10-23T12:55:00Z"
+        },
+        {
+          "id": 110292494,
+          "title": "Personal OS · D-1",
+          "at": "2026-10-24T12:55:00Z"
+        }
+      ]
+    },
+    {
+      "phase": "final-completed",
+      "deviceTime": "2026-10-20T21:59:38+09:00",
+      "qaNativeCount": 6,
+      "osAlarmCount": 6,
+      "mutationCount": 0,
+      "mutation": []
+    },
+    {
+      "phase": "final-reopened",
+      "deviceTime": "2026-10-20T21:59:58+09:00",
+      "qaNativeCount": 10,
+      "osAlarmCount": 10,
+      "mutationCount": 4,
+      "mutation": [
+        {
+          "id": 1926232231,
+          "title": "Personal OS · D-day",
+          "at": "2026-10-25T12:55:00Z"
+        },
+        {
+          "id": 1746728700,
+          "title": "Personal OS · D-3",
+          "at": "2026-10-22T12:55:00Z"
+        },
+        {
+          "id": 363588623,
+          "title": "Personal OS · D-2",
+          "at": "2026-10-23T12:55:00Z"
+        },
+        {
+          "id": 110292494,
+          "title": "Personal OS · D-1",
+          "at": "2026-10-24T12:55:00Z"
+        }
+      ]
+    },
+    {
+      "phase": "final-deadline-edited",
+      "deviceTime": "2026-10-20T22:04:54+09:00",
+      "qaNativeCount": 10,
+      "osAlarmCount": 10,
+      "mutationCount": 4,
+      "mutation": [
+        {
+          "id": 1926232231,
+          "title": "Personal OS · D-1",
+          "at": "2026-10-25T12:55:00Z"
+        },
+        {
+          "id": 1538715154,
+          "title": "Personal OS · D-day",
+          "at": "2026-10-26T12:55:00Z"
+        },
+        {
+          "id": 363588623,
+          "title": "Personal OS · D-3",
+          "at": "2026-10-23T12:55:00Z"
+        },
+        {
+          "id": 110292494,
+          "title": "Personal OS · D-2",
+          "at": "2026-10-24T12:55:00Z"
+        }
+      ]
+    },
+    {
+      "phase": "final-deleted",
+      "deviceTime": "2026-10-20T22:05:20+09:00",
+      "qaNativeCount": 6,
+      "osAlarmCount": 6,
+      "mutationCount": 0,
+      "mutation": []
+    },
+    {
+      "phase": "final-reimport-deleted",
+      "deviceTime": "2026-10-20T22:06:18+09:00",
+      "qaNativeCount": 6,
+      "osAlarmCount": 6,
+      "mutationCount": 0,
+      "mutation": []
+    },
+    {
+      "phase": "final-restored",
+      "deviceTime": "2026-10-20T22:06:39+09:00",
+      "qaNativeCount": 10,
+      "osAlarmCount": 10,
+      "mutationCount": 4,
+      "mutation": [
+        {
+          "id": 1926232231,
+          "title": "Personal OS · D-1",
+          "at": "2026-10-25T12:55:00Z"
+        },
+        {
+          "id": 1538715154,
+          "title": "Personal OS · D-day",
+          "at": "2026-10-26T12:55:00Z"
+        },
+        {
+          "id": 363588623,
+          "title": "Personal OS · D-3",
+          "at": "2026-10-23T12:55:00Z"
+        },
+        {
+          "id": 110292494,
+          "title": "Personal OS · D-2",
+          "at": "2026-10-24T12:55:00Z"
+        }
+      ]
+    },
+    {
+      "phase": "qa-cleaned",
+      "deviceTime": null,
+      "qaNativeCount": 0,
+      "osAlarmCount": 0,
+      "mutationCount": null,
+      "mutation": []
+    }
+  ],
+  "delivered": [
+    {
+      "id": "1606255369",
+      "title": "android.title=String (Personal OS · D-1)",
+      "created": "mCreationTimeMs=1792500900252(2026-10-20 21:55:00.252+0900)"
+    },
+    {
+      "id": "1658017022",
+      "title": "android.title=String (Personal OS · D-2)",
+      "created": "mCreationTimeMs=1792500900308(2026-10-20 21:55:00.308+0900)"
+    },
+    {
+      "id": "140496670",
+      "title": "android.title=String (Personal OS · D-3)",
+      "created": "mCreationTimeMs=1792500900341(2026-10-20 21:55:00.341+0900)"
+    },
+    {
+      "id": "579077439",
+      "title": "android.title=String (Personal OS · D-day)",
+      "created": "mCreationTimeMs=1792500900207(2026-10-20 21:55:00.207+0900)"
+    }
+  ],
+  "finalSettings": {
+    "notificationPermission": "granted",
+    "remainingPersonalOsNotifications": 0,
+    "exactAlarmPermission": "allow",
+    "enabled": true,
+    "clock": "09:00",
+    "remainingQaActions": 0
+  }
+}

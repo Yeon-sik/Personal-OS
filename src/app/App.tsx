@@ -23,6 +23,7 @@ import {
 import { useLocalSyncMemo } from "./useLocalSyncMemo";
 import { useThemeMode } from "./useThemeMode";
 import { APP_TAB_LABELS, type AppTab, type RecordSection } from "./navigation";
+import { useDeadlineNotifications } from "../features/deadline-notifications/useDeadlineNotifications";
 
 export function App() {
   const memo = useLocalSyncMemo();
@@ -78,7 +79,8 @@ export function App() {
   const snapshot: LocalDataSnapshot = useMemo(
     () => ({
       notes: memo.notes,
-      tasks: memo.tasks,
+      tasks: memo.calendarTasks ?? memo.tasks,
+      syncState: memo.actionSyncState,
       workoutRecords: memo.workoutRecords,
       fitnessSharedWorkoutRecords: memo.fitnessSharedWorkoutRecords,
       fitnessSummaryProjections: memo.fitnessSummaryProjections,
@@ -114,6 +116,8 @@ export function App() {
       memo.projectMilestones,
       memo.projects,
       memo.tasks,
+      memo.calendarTasks,
+      memo.actionSyncState,
       memo.weightRecords,
       memo.workoutRecords,
       memo.workstreamActionDependencies,
@@ -125,6 +129,9 @@ export function App() {
       memo.knowledgeDocuments,
     ],
   );
+
+  const deadlineNotifications = useDeadlineNotifications(snapshot.tasks, memo.isReady,
+    JSON.stringify(snapshot.syncState?.scope || { backend: memo.supabaseConfig?.supabaseUrl || "local", userId: memo.userId || "local" }));
 
   function openRecords(section: RecordSection = "all", date?: string) {
     setRecordSection(section);
@@ -156,6 +163,7 @@ export function App() {
               />
             ) : activeView === "settings" ? (
               <SettingsPanel
+                deadlineNotifications={deadlineNotifications}
                 activeDevices={memo.activeDevices}
                 authEmail={memo.authEmail}
                 autostartEnabled={memo.autostartEnabled}
@@ -204,6 +212,9 @@ export function App() {
                     onDeleteTask={memo.deleteTask}
                     onSelectDate={setSelectedDate}
                     onToggleTask={memo.toggleTask}
+                    actionActions={memo.actionActions}
+                    onManualSync={memo.manualSync}
+                    isAuthenticated={memo.isAuthenticated}
                   />
                 ) : recordSection === "memo" ? (
                   <MemoPanel

@@ -1,4 +1,5 @@
 import type { FitnessNutritionSummaryV1 } from "../features/fitness-summary/fitnessNutritionContract";
+import type { LocalSyncState } from "../lib/sync/syncState";
 
 export type EntityId = string;
 export type ISODateString = string;
@@ -24,7 +25,9 @@ export interface Note extends SyncableEntity {
   content: string;
 }
 
-export interface Task extends SyncableEntity {
+export interface Task extends SyncableEntity, Partial<import("./action").TaskActionFields> {
+  /** Local identity scope; remote rows derive this from their authenticated owner. */
+  actionOwnerScope?: string;
   text: string;
   isDone: boolean;
   orderIndex: number;
@@ -216,6 +219,8 @@ export interface Device {
 }
 
 export interface LocalDataSnapshot {
+  /** Rows, dirty revisions and pull cursor are persisted in one local envelope. */
+  syncState?: LocalSyncState;
   notes: Note[];
   tasks: Task[];
   /** Frozen v1 source rows retained only as a local compatibility archive. */

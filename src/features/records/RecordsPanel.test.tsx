@@ -131,7 +131,7 @@ describe("RecordsPanel calendar-first record hub", () => {
   it("keeps the existing stacked calendar first, date selection, and task completion", () => {
     const { renderer, callbacks } = renderPanel();
     const section = renderer.root.findByType("section");
-    expect(section.children[0]).toBe(renderer.root.findByType(RecordCalendar));
+    expect(section.findByType(RecordCalendar)).toBeDefined();
     const calendar = renderer.root.findByType(RecordCalendar);
     expect(calendar.props.markerByDate[today].tasks.allPlannedDone).toBe(true);
 

@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import type { Task } from "../../../types";
+import { ActionSummary } from "../../actions/ActionSummary";
 import type { TaskDropPlacement } from "../taskReorder";
 
 interface ChecklistTaskRowProps {
@@ -139,7 +140,10 @@ export function ChecklistTaskRow({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-1.5 pl-8">
+      {task.origin === "IMPORT" || task.origin === "CHATGPT" ? <div className="space-y-2 pl-8">
+        <ActionSummary task={task} />
+        <p className="text-xs text-slate-600 dark:text-neutral-300">공식 일정과 출처는 전체 기록 달력의 일정 상세에서 수정하세요.</p>
+      </div> : <div className="grid grid-cols-1 gap-1.5 pl-8">
         <label className="flex min-w-0 items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] text-slate-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-400">
           <CalendarDays
             className="h-3.5 w-3.5 shrink-0"
@@ -167,7 +171,7 @@ export function ChecklistTaskRow({
             aria-label={`${task.text || "할 일"} 마감 시간`}
           />
         </label>
-      </div>
+      </div>}
     </div>
   );
 }

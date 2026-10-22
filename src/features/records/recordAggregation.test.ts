@@ -364,7 +364,7 @@ describe("recordAggregation", () => {
     expect(markers["2026-06-09"]).toBeUndefined();
   });
 
-  it("shows scheduled tasks across dates before the due date", () => {
+  it("uses the same planned/deadline projection for markers and date details", () => {
     const scheduledTask: Task = {
       ...directTask,
       id: "task-scheduled",
@@ -382,15 +382,13 @@ describe("recordAggregation", () => {
       "2026-06-09",
     );
 
-    expect(markers["2026-06-07"]?.tasks.activeCount).toBe(1);
-    expect(markers["2026-06-07"]?.tasks.dueCount).toBe(0);
-    expect(markers["2026-06-08"]?.tasks.activeCount).toBe(1);
-    expect(markers["2026-06-08"]?.tasks.dueCount).toBe(0);
+    expect(markers["2026-06-07"]).toBeUndefined();
+    expect(markers["2026-06-08"]).toBeUndefined();
     expect(markers["2026-06-09"]?.tasks.activeCount).toBe(1);
     expect(markers["2026-06-09"]?.tasks.dueCount).toBe(1);
   });
 
-  it("includes still-active scheduled tasks in earlier date records", () => {
+  it("does not show a deadline on unrelated earlier dates", () => {
     const scheduledTask: Task = {
       ...directTask,
       id: "task-scheduled",
@@ -408,15 +406,16 @@ describe("recordAggregation", () => {
       "2026-06-08",
     );
 
-    expect(records.tasks).toHaveLength(1);
-    expect(records.tasks[0].id).toBe("task-scheduled");
+    expect(records.tasks).toHaveLength(0);
+    expect(getRecordsForDate({ ...snapshot, tasks: [scheduledTask] }, "2026-06-09").tasks[0].id).toBe("task-scheduled");
   });
 
-  it("counts multiple active tasks as multiple calendar dots before the due date", () => {
+  it("counts only the actions projected onto each calendar date", () => {
     const firstTask: Task = {
       ...directTask,
       id: "task-scheduled-1",
       isDone: false,
+      plannedDate: null,
       createdAt: "2026-06-07T00:00:00.000Z",
       updatedAt: "2026-06-07T00:00:00.000Z",
       dueDate: "2026-06-09",
@@ -425,6 +424,7 @@ describe("recordAggregation", () => {
       ...directTask,
       id: "task-scheduled-2",
       isDone: false,
+      plannedDate: null,
       createdAt: "2026-06-08T00:00:00.000Z",
       updatedAt: "2026-06-08T00:00:00.000Z",
       dueDate: "2026-06-10",
@@ -437,10 +437,10 @@ describe("recordAggregation", () => {
       "2026-06-09",
     );
 
-    expect(markers["2026-06-08"]?.tasks.activeCount).toBe(2);
-    expect(markers["2026-06-08"]?.tasks.dueCount).toBe(0);
-    expect(markers["2026-06-09"]?.tasks.activeCount).toBe(2);
+    expect(markers["2026-06-08"]).toBeUndefined();
+    expect(markers["2026-06-09"]?.tasks.activeCount).toBe(1);
     expect(markers["2026-06-09"]?.tasks.dueCount).toBe(1);
+    expect(markers["2026-06-10"]?.tasks.activeCount).toBe(1);
   });
 
   it("uses planned dates for productivity and marks fully completed planned days", () => {

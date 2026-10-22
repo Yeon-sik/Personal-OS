@@ -2,6 +2,8 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "load_runtime_config",
+            "deadline_exact_alarm_status",
+            "deadline_open_exact_alarm_settings",
             "load_persisted_device",
             "save_persisted_device",
             "quick_capture_shortcut_status",

@@ -18,11 +18,9 @@ import {
 import { getOrCreateDevice, upsertDevice } from "../../lib/device/device";
 import { localStorageAdapter } from "../../lib/storage/localStorageAdapter";
 import type { StorageAdapter } from "../../lib/storage/storageAdapter";
-import {
-  mergeAuthoritativeSnapshot,
-  mergeSnapshot,
-} from "../../lib/sync/supabase/snapshotMerge";
 import { createSyncQueue } from "../../lib/sync/syncQueue";
+import { initializeSyncState, sameScope, trackLocalChanges } from "../../lib/sync/syncState";
+import { reconcilePull, reconcileResult, reconcileRealtime } from "../../lib/sync/syncReconciliation";
 import {
   createAppSyncClient,
   getConfiguredUserId,
@@ -47,50 +45,6 @@ const initialSyncStatus: SyncStatus = {
   lastSyncedAt: null,
   isConfigured: false,
 };
-
-const snapshotCollections = [
-  "notes",
-  "tasks",
-  "workoutRecords",
-  "fitnessSummaryProjections",
-  "fitnessNutritionSummaries",
-  "fitnessWeightRecords",
-  "mealRecords",
-  "weightRecords",
-  "projects",
-  "projectMilestones",
-  "projectActions",
-  "projectIdeas",
-  "projectHistory",
-  "workstreams",
-  "workstreamProjects",
-  "workstreamMilestones",
-  "workstreamActions",
-  "workstreamActionProjects",
-  "workstreamActionDependencies",
-  "knowledgeDocuments",
-] as const;
-
-function hasEntitySnapshotChanges(
-  current: LocalDataSnapshot,
-  next: LocalDataSnapshot,
-): boolean {
-  return snapshotCollections.some((collection) => {
-    const currentEntities = current[collection] ?? [];
-    const nextEntities = next[collection] ?? [];
-
-    if (currentEntities.length !== nextEntities.length) {
-      return true;
-    }
-
-    const currentById = new Map(
-      currentEntities.map((entity) => [entity.id, entity]),
-    );
-    return nextEntities.some(
-      (entity) => currentById.get(entity.id) !== entity,
-    );
-  });
-}
 
 export interface MemoSyncRuntime
   extends Pick<SnapshotStore, "commitSnapshot" | "snapshot"> {
@@ -119,6 +73,7 @@ export interface MemoSyncRuntime
   supabaseConfig: RuntimeConfig;
   syncStatus: SyncStatus;
   userId: string;
+  commitDurably: (updater: Parameters<SnapshotStore["commitSnapshot"]>[0], track?: boolean) => Promise<void>;
 }
 
 export function useMemoSyncRuntime(
@@ -145,7 +100,10 @@ export function useMemoSyncRuntime(
   const [localLoadFailed, setLocalLoadFailed] = useState(false);
   const remoteSyncBlockedRef = useRef(false);
   const remoteSyncQueueRef = useRef(createSyncQueue());
-  const pendingRemoteSnapshotRef = useRef<LocalDataSnapshot | null>(null);
+  const localSaveQueueRef = useRef(createSyncQueue());
+  const hydratedStorageRef = useRef<StorageAdapter | null>(null);
+  const lastSavedSnapshotRef = useRef<LocalDataSnapshot | null>(null);
+  const [authEpoch, setAuthEpoch] = useState(0);
   const activeManualSyncCountRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -155,6 +113,7 @@ export function useMemoSyncRuntime(
   const [autostartSupported, setAutostartSupported] = useState(false);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const activeRuntimeConfig = runtimeConfig ?? emptyRuntimeConfig;
+  const backend = injectedSyncClient?.getBackend?.() || activeRuntimeConfig.supabaseUrl.trim().replace(/\/+$/, "") || "injected";
   const isRuntimeConfigReady =
     runtimeConfig !== null || Boolean(injectedSyncClient) || Boolean(injectedUserId);
   const syncClient = useMemo(
@@ -171,19 +130,50 @@ export function useMemoSyncRuntime(
   );
   const commitLocalSnapshot = useCallback(
     (updater: Parameters<SnapshotStore["commitSnapshot"]>[0]) => {
-      pendingRemoteSnapshotRef.current = null;
-      commitSnapshot(updater);
+      commitSnapshot((current) => trackLocalChanges(current, updater(current), device?.id ?? ""));
     },
-    [commitSnapshot],
+    [commitSnapshot, device?.id],
   );
 
   const applyRemoteSnapshot = useCallback(
     (nextSnapshot: LocalDataSnapshot) => {
-      pendingRemoteSnapshotRef.current = nextSnapshot;
       replaceSnapshot(nextSnapshot);
     },
     [replaceSnapshot],
   );
+
+  const persistCurrentSnapshot = useCallback(() => localSaveQueueRef.current.enqueue(async () => {
+    const current = snapshotRef.current;
+    if (lastSavedSnapshotRef.current === current) return current;
+    await storage.save(current);
+    lastSavedSnapshotRef.current = current;
+    return current;
+  }), [snapshotRef, storage]);
+
+  const persistRemoteSnapshot = useCallback((transform: (current: LocalDataSnapshot) => LocalDataSnapshot) =>
+    localSaveQueueRef.current.enqueue(async () => {
+      // A delayed adapter can overlap with new edits. Rebase and save again
+      // before installing the checkpoint, never overwrite a newer revision.
+      for (;;) {
+        const current = snapshotRef.current;
+        const transformed = transform(current);
+        const next = JSON.stringify(transformed) === JSON.stringify(current) ? current : transformed;
+        // The remote result can be a no-op because a newer revision is dirty.
+        // That newer local revision still needs durable storage before return.
+        if (next === current && lastSavedSnapshotRef.current === current) return current;
+        await storage.save(next);
+        lastSavedSnapshotRef.current = next;
+        if (snapshotRef.current === current) {
+          applyRemoteSnapshot(next);
+          return next;
+        }
+      }
+    }), [applyRemoteSnapshot, snapshotRef, storage]);
+
+  const commitDurably = useCallback(async (updater: Parameters<SnapshotStore["commitSnapshot"]>[0], track = true) => {
+    if (!device || !isReady || localLoadFailed) throw new Error("로컬 저장 준비가 완료되지 않았습니다.");
+    await persistRemoteSnapshot(current => track ? trackLocalChanges(current, updater(current), device.id) : updater(current));
+  }, [device, isReady, localLoadFailed, persistRemoteSnapshot]);
 
   useEffect(() => {
     if (injectedSyncClient || injectedUserId) {
@@ -216,6 +206,7 @@ export function useMemoSyncRuntime(
 
     async function hydrate() {
       const currentDevice = await getOrCreateDevice();
+      if (!isMounted) return;
       setIsHydrating(true);
 
       try {
@@ -224,7 +215,8 @@ export function useMemoSyncRuntime(
         // from deciding whether local data is shown.
         let storedSnapshot: LocalDataSnapshot;
         try {
-          storedSnapshot = await storage.load();
+          storedSnapshot = hydratedStorageRef.current === storage ? snapshotRef.current : await storage.load();
+          hydratedStorageRef.current = storage;
         } catch (caughtError) {
           if (isMounted) {
             const message =
@@ -240,10 +232,10 @@ export function useMemoSyncRuntime(
           return;
         }
 
-        const localSnapshot: LocalDataSnapshot = {
+        const localSnapshot = initializeSyncState({
           ...storedSnapshot,
           devices: upsertDevice(storedSnapshot.devices, currentDevice),
-        };
+        }, null, currentDevice.id);
         if (!isMounted) {
           return;
         }
@@ -256,10 +248,11 @@ export function useMemoSyncRuntime(
         setSaveState("saved");
 
         const authState = await syncClient.getAuthState();
+        if (!isMounted) return;
         if (
           authState.userId &&
-          activeRuntimeConfig.boundUserId &&
-          authState.userId !== activeRuntimeConfig.boundUserId
+          ((activeRuntimeConfig.boundUserId && authState.userId !== activeRuntimeConfig.boundUserId) ||
+            (snapshotRef.current.syncState?.scope && !sameScope(snapshotRef.current.syncState.scope, { backend, userId: authState.userId })))
         ) {
           await syncClient.signOut();
           throw new Error(
@@ -278,25 +271,31 @@ export function useMemoSyncRuntime(
         const context: SyncContext = {
           device: currentDevice,
           userId: resolvedUserId,
+          backend,
         };
-        const syncedSnapshot = await remoteSyncQueueRef.current.enqueue(() =>
-          syncClient.pull(snapshotRef.current, context),
-        );
+        const scope = injectedUserId || authState.userId ? { backend, userId: resolvedUserId } : null;
+        const prepared = initializeSyncState(snapshotRef.current, scope, currentDevice.id);
+        replaceSnapshot(prepared);
+        // Binding the queue and its pending rows is durable before remote I/O.
+        await persistCurrentSnapshot();
+        if (!isMounted) return;
+        let pullBase = snapshotRef.current;
+        const syncedSnapshot = await remoteSyncQueueRef.current.enqueue(() => {
+          pullBase = snapshotRef.current;
+          return isMounted ? syncClient.pull(pullBase, context) : Promise.resolve(pullBase);
+        });
+        if (!isMounted) return;
         const pullStatus = syncClient.getStatus();
-        const mergedSnapshot = mergeSnapshot(snapshotRef.current, syncedSnapshot);
-        const nextSnapshot: LocalDataSnapshot = {
-          ...mergedSnapshot,
-          devices: upsertDevice(mergedSnapshot.devices, currentDevice),
-        };
+        const nextSnapshot = await persistRemoteSnapshot((current) => {
+          const merged = reconcilePull(current, syncedSnapshot, pullBase);
+          return { ...merged, devices: upsertDevice(merged.devices, currentDevice) };
+        });
         const nextVisibleNotes = getVisibleNotes(nextSnapshot.notes);
-
-        await storage.save(nextSnapshot);
 
         if (!isMounted) {
           return;
         }
 
-        replaceSnapshot(nextSnapshot);
         setDevice(currentDevice);
         setActiveDevices([currentDevice]);
         setSelectedNoteId(nextVisibleNotes[0]?.id ?? null);
@@ -305,10 +304,10 @@ export function useMemoSyncRuntime(
         setIsHydrating(false);
         setSaveState("saved");
 
-        if (pullStatus.mode === "error") {
-          remoteSyncBlockedRef.current = true;
+        remoteSyncBlockedRef.current = pullStatus.mode === "error";
+        if (remoteSyncBlockedRef.current) {
           setError(pullStatus.detail);
-        }
+        } else setError(null);
       } catch (caughtError) {
         if (!isMounted) {
           return;
@@ -342,13 +341,15 @@ export function useMemoSyncRuntime(
     };
   }, [
     activeRuntimeConfig,
-    commitLocalSnapshot,
+    authEpoch,
+    backend,
     injectedUserId,
     isRuntimeConfigReady,
     replaceSnapshot,
     storage,
     syncClient,
-    userId,
+    persistCurrentSnapshot,
+    persistRemoteSnapshot,
   ]);
 
   useEffect(() => {
@@ -383,15 +384,18 @@ export function useMemoSyncRuntime(
       return;
     }
 
-    const context: SyncContext = { device, userId };
+    const context: SyncContext = { device, userId, backend };
+    let isSubscribed = true;
     const realtimeSubscription = syncClient.subscribeRealtime({
       context,
       getSnapshot: () => snapshotRef.current,
       onSnapshot: (nextSnapshot, status) => {
-        applyRemoteSnapshot(nextSnapshot);
-        setSyncStatus(status);
-        setError(null);
-        void storage.save(nextSnapshot).catch((caughtError: unknown) => {
+        if (!isSubscribed) return;
+        void persistRemoteSnapshot((current) => isSubscribed ? reconcileRealtime(current, nextSnapshot) : current).then(() => {
+          if (!isSubscribed) return;
+          setSyncStatus(status);
+          setError(null);
+        }).catch((caughtError: unknown) => {
           const message =
             caughtError instanceof Error
               ? caughtError.message
@@ -408,6 +412,7 @@ export function useMemoSyncRuntime(
     const heartbeatSubscription = syncClient.startHeartbeat(context);
 
     return () => {
+      isSubscribed = false;
       void realtimeSubscription.unsubscribe();
       void heartbeatSubscription.unsubscribe();
     };
@@ -421,6 +426,8 @@ export function useMemoSyncRuntime(
     storage,
     syncClient,
     userId,
+    backend,
+    persistRemoteSnapshot,
   ]);
 
   useEffect(() => {
@@ -434,33 +441,16 @@ export function useMemoSyncRuntime(
       ...device,
       lastSeenAt: new Date().toISOString(),
     };
-    const snapshotToSave: LocalDataSnapshot = {
-      ...snapshot,
-      devices: upsertDevice(snapshot.devices, currentDevice),
-    };
-    const context: SyncContext = { device: currentDevice, userId };
+    const context: SyncContext = { device: currentDevice, userId, backend };
 
     const saveTimer = window.setTimeout(() => {
-      storage
-        .save(snapshotToSave)
+      persistCurrentSnapshot()
         .then(async () => {
           if (isHydrating) {
             // Persist edits made while the remote hydration request is still
             // running, but defer the remote write until pull/merge finishes.
             setSaveState("saved");
             return;
-          }
-          if (pendingRemoteSnapshotRef.current === snapshot) {
-            // The remote merge is already authoritative. Persist it locally,
-            // but do not turn the reconciliation render into another push.
-            pendingRemoteSnapshotRef.current = null;
-            setSaveState("saved");
-            return;
-          }
-          if (pendingRemoteSnapshotRef.current) {
-            // A local edit replaced a previously reconciled snapshot before
-            // its debounce fired, so the edit must be eligible for pushing.
-            pendingRemoteSnapshotRef.current = null;
           }
           // A failed pull must not be hidden by a follow-up push. Keep the
           // local snapshot durable and wait for manual/online retry instead.
@@ -473,7 +463,12 @@ export function useMemoSyncRuntime(
           }
 
           await remoteSyncQueueRef.current.enqueue(async () => {
-            const result = await syncClient.push(snapshotToSave, context);
+            // Read at queue execution, not when the debounce was scheduled.
+            // Persist before sending, including revisions created while queued.
+            const sending = await persistCurrentSnapshot();
+            if (!sending.syncState?.pending.length) { setSaveState("saved"); return; }
+            const result = await syncClient.push(sending, context);
+            await persistRemoteSnapshot((current) => reconcileResult(current, result));
 
             if (result.status.mode === "error") {
               remoteSyncBlockedRef.current = true;
@@ -481,19 +476,6 @@ export function useMemoSyncRuntime(
               setSyncStatus(result.status);
               setError(result.status.detail);
               return;
-            }
-
-            // Rebase the authoritative push result on edits that happened
-            // while the remote request was waiting or in flight.
-            const reconciledSnapshot = result.snapshot
-              ? mergeAuthoritativeSnapshot(
-                  snapshotRef.current,
-                  result.snapshot,
-                )
-              : mergeSnapshot(snapshotRef.current, snapshotToSave);
-            if (hasEntitySnapshotChanges(snapshotRef.current, reconciledSnapshot)) {
-              await storage.save(reconciledSnapshot);
-              applyRemoteSnapshot(reconciledSnapshot);
             }
 
             remoteSyncBlockedRef.current = false;
@@ -525,6 +507,9 @@ export function useMemoSyncRuntime(
     syncClient,
     userId,
     applyRemoteSnapshot,
+    backend,
+    persistCurrentSnapshot,
+    persistRemoteSnapshot,
   ]);
 
   useEffect(() => {
@@ -554,7 +539,7 @@ export function useMemoSyncRuntime(
 
     let isMounted = true;
     const currentDevice = device;
-    const context: SyncContext = { device: currentDevice, userId };
+    const context: SyncContext = { device: currentDevice, userId, backend };
 
     async function refreshActiveDevices() {
       const fallbackDevices = upsertDevice(snapshot.devices, {
@@ -586,6 +571,7 @@ export function useMemoSyncRuntime(
     snapshot.devices,
     syncClient,
     userId,
+    backend,
   ]);
 
   useEffect(() => {
@@ -616,12 +602,13 @@ export function useMemoSyncRuntime(
       detail: "수동 동기화를 실행하는 중입니다.",
     });
 
-    const context: SyncContext = { device, userId };
+    const context: SyncContext = { device, userId, backend };
 
     try {
       await remoteSyncQueueRef.current.enqueue(async () => {
+        const durable = await persistCurrentSnapshot();
         const pulledSnapshot = await syncClient.pull(
-          snapshotRef.current,
+          durable,
           context,
         );
         const pullStatus = syncClient.getStatus();
@@ -633,22 +620,14 @@ export function useMemoSyncRuntime(
           return;
         }
 
-        const rebasedSnapshot = mergeSnapshot(
-          snapshotRef.current,
-          pulledSnapshot,
-        );
+        const rebasedSnapshot = await persistRemoteSnapshot((current) => reconcilePull(current, pulledSnapshot, durable));
         const pushResult = await syncClient.push(rebasedSnapshot, context);
-        const latestLocalSnapshot = mergeSnapshot(
-          snapshotRef.current,
-          rebasedSnapshot,
-        );
+        await persistRemoteSnapshot((current) => reconcileResult(current, pushResult));
 
         if (pushResult.status.mode === "error") {
           remoteSyncBlockedRef.current = true;
           // Keep the merged pull and any edits made while the request is in
           // flight durable, while reporting the failed remote write explicitly.
-          await storage.save(latestLocalSnapshot);
-          applyRemoteSnapshot(latestLocalSnapshot);
           setSyncStatus(pushResult.status);
           setError(pushResult.status.detail);
           setSaveState("error");
@@ -657,15 +636,6 @@ export function useMemoSyncRuntime(
 
         // A user can edit while pull or push is in flight. Rebase the result on
         // the latest ref before replacing React state so that edit is retained.
-        const committedSnapshot = pushResult.snapshot
-          ? mergeAuthoritativeSnapshot(
-              snapshotRef.current,
-              pushResult.snapshot,
-            )
-          : mergeSnapshot(snapshotRef.current, rebasedSnapshot);
-        await storage.save(committedSnapshot);
-
-        applyRemoteSnapshot(committedSnapshot);
         remoteSyncBlockedRef.current = false;
         setSyncStatus(pushResult.status);
         setError(null);
@@ -699,6 +669,9 @@ export function useMemoSyncRuntime(
     storage,
     syncClient,
     userId,
+    backend,
+    persistCurrentSnapshot,
+    persistRemoteSnapshot,
   ]);
 
   useEffect(() => {
@@ -752,8 +725,8 @@ export function useMemoSyncRuntime(
         throw new Error("인증된 사용자 ID를 확인하지 못했습니다.");
       }
       if (
-        activeRuntimeConfig.boundUserId &&
-        activeRuntimeConfig.boundUserId !== authState.userId
+        (activeRuntimeConfig.boundUserId && activeRuntimeConfig.boundUserId !== authState.userId) ||
+        (snapshotRef.current.syncState?.scope && !sameScope(snapshotRef.current.syncState.scope, { backend, userId: authState.userId }))
       ) {
         await syncClient.signOut();
         throw new Error(
@@ -771,7 +744,7 @@ export function useMemoSyncRuntime(
       setSaveState("saving");
       setError(null);
     },
-    [activeRuntimeConfig, syncClient],
+    [activeRuntimeConfig, backend, snapshotRef, syncClient],
   );
 
   const signOut = useCallback(async () => {
@@ -779,6 +752,7 @@ export function useMemoSyncRuntime(
     setAuthenticatedUserId(null);
     setAuthEmail(null);
     setIsReady(false);
+    setAuthEpoch((current) => current + 1);
     setSyncStatus(syncClient.getStatus());
   }, [syncClient]);
 
@@ -804,6 +778,7 @@ export function useMemoSyncRuntime(
     autostartEnabled,
     autostartSupported,
     commitSnapshot: commitLocalSnapshot,
+    commitDurably,
     device,
     error,
     isAuthenticated: Boolean(authenticatedUserId),

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ACTION_DEFAULTS } from "../../../features/actions/actionModel";
 import {
   deviceFromRow,
   deviceToRow,
@@ -79,7 +80,7 @@ describe("Supabase row mappers", () => {
     const workstreamActionDependency = makeWorkstreamActionDependency();
 
     expect(noteFromRow(noteToRow(note, USER_ID))).toEqual(note);
-    expect(taskFromRow(taskToRow(task, USER_ID))).toEqual(task);
+    expect(taskFromRow(taskToRow(task, USER_ID))).toEqual({ ...ACTION_DEFAULTS, ...task, actionOwnerScope: USER_ID });
     expect(workoutRecordFromRow(workoutRecordToRow(workout, USER_ID))).toEqual(
       workout,
     );

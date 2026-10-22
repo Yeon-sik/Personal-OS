@@ -3,6 +3,7 @@ import { getVisibleNotes } from "../features/notes/noteService";
 import { useNoteActions } from "../features/notes/useNoteActions";
 import { getVisibleTasks } from "../features/tasks/taskService";
 import { useTaskActions } from "../features/tasks/useTaskActions";
+import { useActionActions } from "../features/actions/useActionActions";
 import { useDevControlActions } from "../features/dev-control/useDevControlActions";
 import { useKnowledgeVaultRuntime } from "../features/knowledge-vault/useKnowledgeVaultRuntime";
 import {
@@ -98,6 +99,7 @@ export function useLocalSyncMemo(
     commitSnapshot: runtime.commitSnapshot,
     device: runtime.device,
   });
+  const actionActions = useActionActions(runtime);
   const devControlActions = useDevControlActions({
     commitSnapshot: runtime.commitSnapshot,
     snapshot: runtime.snapshot,
@@ -117,6 +119,9 @@ export function useLocalSyncMemo(
     authEmail: runtime.authEmail,
     ...noteActions,
     ...taskActions,
+    actionActions,
+    calendarTasks: runtime.snapshot.tasks,
+    actionSyncState: runtime.snapshot.syncState,
     autostartEnabled: runtime.autostartEnabled,
     autostartSupported: runtime.autostartSupported,
     device: runtime.device,

@@ -85,12 +85,21 @@ const emptyTaskMarker: CalendarTaskMarker = {
   allPlannedDone: false,
 };
 
-const calendarCellSize = "h-[clamp(5.75rem,16vw,6.75rem)] min-w-0";
+const calendarCellSize = "h-[clamp(8.25rem,24vw,9rem)] min-w-0";
 const calendarCellBase =
   `${calendarCellSize} flex flex-col justify-between gap-1 ` +
   "rounded-md border-2 px-1 py-1 text-xs";
 
 function renderTaskMarker(taskMarker: CalendarTaskMarker) {
+  const confirmed = taskMarker.confirmedCount ?? 0;
+  const candidates = taskMarker.candidateCount ?? 0;
+  if (confirmed || candidates) {
+    return <span className="flex h-full min-w-0 items-center justify-center gap-1 overflow-hidden rounded-sm border border-teal-600 text-[8px] font-semibold text-teal-800 dark:text-teal-300"
+      title={`확정 일정 ${confirmed}개 · 마감 ${taskMarker.dueCount}개 · 후보 ${candidates}개`}>
+      {confirmed > 0 && <span className="truncate">일정 {confirmed}</span>}
+      {candidates > 0 && <span className="truncate border-l border-dashed border-amber-600 pl-0.5 text-amber-900 dark:text-amber-200">후보 {candidates}</span>}
+    </span>;
+  }
   if (taskMarker.dueCount > 0) {
     return (
       <span
@@ -219,6 +228,7 @@ export function RecordCalendar({
             <button
               key={date}
               type="button"
+              aria-label={`${date} · 일정 ${taskMarker.confirmedCount ?? 0}개 · 후보 ${taskMarker.candidateCount ?? 0}개`}
               onClick={() => {
                 onSelectDate(date);
               }}

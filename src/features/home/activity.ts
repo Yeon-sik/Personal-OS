@@ -90,7 +90,7 @@ export function getActivityTimeline(
     if (note.deletedAt === null) add("notes", note.id, timestampDate(note.createdAt, formatter));
   }
   for (const task of snapshot.tasks) {
-    if (task.deletedAt === null) add("tasks", task.id, timestampDate(task.createdAt, formatter));
+    if (task.deletedAt === null && task.registrationState !== "CANDIDATE") add("tasks", task.id, timestampDate(task.createdAt, formatter));
   }
   for (const document of snapshot.knowledgeDocuments) {
     if (document.deletedAt === null) add("knowledgeDocuments", document.id, timestampDate(document.createdAt, formatter));
