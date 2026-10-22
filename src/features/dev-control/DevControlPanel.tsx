@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useWindowsDesktop } from "../../app/WindowsDesktopContext";
+import { useMobileLayout } from "../../app/MobileLayoutContext";
 
 import type {
   Project,
@@ -105,6 +107,8 @@ export function DevControlPanel({
   actions,
   github = unavailableGitHubIntegration,
 }: DevControlPanelProps) {
+  const windowsDesktop = useWindowsDesktop();
+  const mobileLayout = useMobileLayout();
   const [activeSection, setActiveSection] = useState<"projects" | "workstreams">(
     "projects",
   );
@@ -118,23 +122,13 @@ export function DevControlPanel({
     }
   }, [github.refreshProject, github.status.connected, projects]);
 
-  return (
-    <div className="os-project-content flex h-full min-h-0 flex-col gap-3 overflow-auto pr-1">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-slate-950 dark:text-neutral-50">
-            프로젝트
-          </h2>
-          <p className="text-[11px] text-slate-500 dark:text-neutral-400">
-            프로젝트 운영 상태를 한눈에 확인하세요
-          </p>
-        </div>
-        <div className="flex flex-wrap justify-end gap-2">
+  const sectionButtons = <>
           <button
             type="button"
             onClick={() => setActiveSection("projects")}
+            aria-pressed={windowsDesktop || mobileLayout ? activeSection === "projects" : undefined}
             className={
-              activeSection === "projects"
+              windowsDesktop ? "win-button" : activeSection === "projects"
                 ? "rounded bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white dark:bg-white dark:text-black"
                 : "rounded border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:border-neutral-700 dark:text-neutral-300"
             }
@@ -144,25 +138,45 @@ export function DevControlPanel({
           <button
             type="button"
             onClick={() => setActiveSection("workstreams")}
+            aria-pressed={windowsDesktop || mobileLayout ? activeSection === "workstreams" : undefined}
             className={
-              activeSection === "workstreams"
+              windowsDesktop ? "win-button" : activeSection === "workstreams"
                 ? "rounded bg-teal-700 px-2.5 py-1.5 text-xs font-semibold text-white"
                 : "rounded border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:border-neutral-700 dark:text-neutral-300"
             }
           >
             워크스트림
           </button>
-          {activeSection === "projects" ? (
+        </>;
+  const createProjectButton = activeSection === "projects" ? (
             <button
               type="button"
               onClick={onCreateProjectWorkspace}
-              className="rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 dark:bg-white dark:text-black"
+              className={windowsDesktop ? "win-button win-primary" : mobileLayout ? "mobile-primary" : "rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 dark:bg-white dark:text-black"}
             >
               새 프로젝트
             </button>
-          ) : null}
+          ) : null;
+
+  return (
+    <div className="os-project-content flex h-full min-h-0 flex-col gap-3 overflow-auto pr-1">
+      {windowsDesktop ? <header className="win-project-heading">
+        <div><h2>프로젝트</h2>{createProjectButton}</div>
+        <p>프로젝트 운영 상태를 한눈에 확인하세요</p>
+        <div className="win-project-switcher" role="group" aria-label="프로젝트 보기">{sectionButtons}</div>
+      </header> : mobileLayout ? <header className="mobile-project-heading">
+        <div><h2>진행 상황</h2>{createProjectButton}</div>
+        <p>프로젝트와 작업 묶음의 다음 행동을 확인하세요.</p>
+        <div className="mobile-project-switcher" role="group" aria-label="프로젝트 보기">{sectionButtons}</div>
+      </header> : <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-slate-950 dark:text-neutral-50">프로젝트</h2>
+          <p className="text-[11px] text-slate-500 dark:text-neutral-400">프로젝트 운영 상태를 한눈에 확인하세요</p>
         </div>
-      </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          {sectionButtons}{createProjectButton}
+        </div>
+      </div>}
 
       {activeSection === "workstreams" ? (
         actions ? (
@@ -220,23 +234,24 @@ export function DevControlPanel({
                 <button
                   key={project.id}
                   type="button"
+                  data-selected={windowsDesktop ? selectedProjectId === project.id : undefined}
                   onClick={() => onOpenProjectWorkspace(project.id)}
-                  className={`grid gap-2 rounded-lg border p-3 text-left transition ${
+                  className={`${windowsDesktop ? "win-project-card " : ""}grid gap-2 rounded-lg border p-3 text-left transition ${
                     selectedProjectId === project.id
                       ? "border-teal-500 bg-teal-50 dark:bg-teal-950/30"
                       : "border-slate-200 bg-white hover:border-slate-400 dark:border-neutral-800 dark:bg-neutral-950"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-semibold">{project.name}</span>
-                    <span className="shrink-0 text-[10px] text-slate-500">
+                    <span className="truncate text-sm font-semibold" title={windowsDesktop ? project.name : undefined}>{project.name}</span>
+                    <span className={`${windowsDesktop ? "win-project-status " : ""}shrink-0 text-[10px] text-slate-500`}>
                       {PROJECT_STATUS_LABELS[project.status]}
                     </span>
                   </div>
                   <p className="line-clamp-2 text-xs text-slate-600 dark:text-neutral-300">
                     {getDerivedProjectCardSummary(project, actions, model?.remoteHead?.message)}
                   </p>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-slate-500 dark:text-neutral-400 sm:grid-cols-4">
+                  <div className={`${windowsDesktop ? "win-project-meta " : ""}grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-slate-500 dark:text-neutral-400 sm:grid-cols-4`}>
                     <span>다음 작업 {getOpenNextCount(actions)}</span>
                     <span className={blocked ? "font-semibold text-rose-600" : ""}>
                       {blocked ? "차단됨" : "차단 없음"}

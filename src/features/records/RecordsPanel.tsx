@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useWindowsDesktop } from "../../app/WindowsDesktopContext";
+import { useMobileLayout } from "../../app/MobileLayoutContext";
 import type {
   BackfillInput,
   LocalDataSnapshot,
@@ -9,7 +11,7 @@ import type {
 } from "../../lib/sync/syncTypes";
 import { QuickActionOverlay } from "../command-center/quickActions/QuickActionOverlay";
 import { useQuickActionState } from "../command-center/quickActions/useQuickActionState";
-import { formatLocalDate } from "../fitness/fitnessDate";
+import { formatKoreanDate, formatLocalDate } from "../fitness/fitnessDate";
 import { useFinanceCalendar } from "../finance/useFinanceCalendar";
 import { FinanceDailyCard } from "./components/FinanceDailyCard";
 import { RecordsOverview } from "./components/RecordsOverview";
@@ -58,6 +60,10 @@ export function RecordsPanel({
   onSelectDate,
   onToggleTask,
 }: RecordsPanelProps) {
+  const windowsDesktop = useWindowsDesktop();
+  const mobileLayout = useMobileLayout();
+  const selectedRecordsRef = useRef<HTMLDivElement>(null);
+  const selectedRecordsId = useId();
   const today = formatLocalDate();
   const [visibleMonth, setVisibleMonth] = useState(selectedDate);
   const {
@@ -100,27 +106,23 @@ export function RecordsPanel({
     }
   }
 
-  return (
-    <section className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
-      <RecordCalendar
+  const calendar = <RecordCalendar
         markerByDate={markerByDate}
         financeByDate={financeByDate}
         selectedDate={selectedDate}
         visibleMonth={visibleMonth}
         onSelectDate={onSelectDate}
         onVisibleMonthChange={setVisibleMonth}
-      />
-
-      <FinanceDailyCard
+      />;
+  const financeCard = <FinanceDailyCard
         financeEnabled={financeEnabled}
         financeError={financeError}
         isFinanceLoading={isFinanceLoading}
         onRefresh={refreshFinance}
         selectedDate={selectedDate}
         selectedFinance={selectedFinance}
-      />
-
-      <SelectedDateRecords
+      />;
+  const dateRecords = <SelectedDateRecords
         onDeleteNote={onDeleteNote}
         onDeleteTask={onDeleteTask}
         onOpenBackfillAction={openBackfillAction}
@@ -129,7 +131,39 @@ export function RecordsPanel({
         records={selectedRecords}
         selectedDate={selectedDate}
         today={today}
-      />
+      />;
+  const selectedCount = selectedRecords.notes.length + selectedRecords.tasks.length + selectedRecords.workoutRecords.length
+    + selectedRecords.mealRecords.length + (selectedRecords.fitnessNutritionSummary?.mealCount ?? 0) + selectedRecords.weightRecords.length;
+
+  return (
+    <section className={`${windowsDesktop ? "win-records " : mobileLayout ? "mobile-records " : ""}flex h-full min-h-0 flex-col gap-3 overflow-y-auto`}>
+      {windowsDesktop ? <div className="win-records-layout">
+        <div className="win-records-calendar">
+          <div className="win-record-selection">
+            <div aria-live="polite" aria-atomic="true"><strong>{formatKoreanDate(selectedDate)}</strong><span>선택한 날짜 · 기록 {selectedCount}개</span></div>
+            <button type="button" className="win-button" aria-controls={selectedRecordsId} onClick={() => {
+              selectedRecordsRef.current?.scrollIntoView({ block: "start" });
+              selectedRecordsRef.current?.focus({ preventScroll: true });
+            }}>기록 보기</button>
+          </div>
+          {calendar}
+        </div>
+        <div className="win-records-detail">
+          {financeCard}
+          <div id={selectedRecordsId} ref={selectedRecordsRef} tabIndex={-1} role="region" aria-label="선택 날짜 기록" className="win-date-records-target">{dateRecords}</div>
+        </div>
+      </div> : mobileLayout ? <>
+        <div className="mobile-record-selection">
+          <div aria-live="polite" aria-atomic="true"><strong>{formatKoreanDate(selectedDate)}</strong><span>기록 {selectedCount}개</span></div>
+          <button type="button" aria-controls={selectedRecordsId} onClick={() => {
+            selectedRecordsRef.current?.scrollIntoView({ block: "start" });
+            selectedRecordsRef.current?.focus({ preventScroll: true });
+          }}>기록 보기</button>
+        </div>
+        {calendar}
+        <div id={selectedRecordsId} ref={selectedRecordsRef} tabIndex={-1} role="region" aria-label="선택 날짜 기록" className="mobile-date-records-target">{dateRecords}</div>
+        {financeCard}
+      </> : <>{calendar}{financeCard}{dateRecords}</>}
 
       <RecordsOverview
         selectedDate={selectedDate}

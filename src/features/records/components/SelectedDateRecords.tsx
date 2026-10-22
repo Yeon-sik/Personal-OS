@@ -23,6 +23,8 @@ import type { DateRecords } from "../recordAggregation";
 import { formatRecordTime, formatTaskDueLabel } from "../recordDisplayFormatters";
 import { DailyItem, DailySection, DeleteItemButton } from "./DailyRecordSection";
 import { MarkerLegend } from "./RecordMarkerLegend";
+import { useWindowsDesktop } from "../../../app/WindowsDesktopContext";
+import { useMobileLayout } from "../../../app/MobileLayoutContext";
 
 interface SelectedDateRecordsProps {
   onDeleteNote: (noteId: string) => void;
@@ -118,6 +120,9 @@ export function SelectedDateRecords({
   selectedDate,
   today,
 }: SelectedDateRecordsProps) {
+  const windowsDesktop = useWindowsDesktop();
+  const mobileLayout = useMobileLayout();
+  const TaskCheckContainer = mobileLayout ? "label" : "div";
   const selectedDateIsPast = isPastLocalDate(selectedDate, today);
   const selectedDateIsFuture = isFutureLocalDate(selectedDate, today);
   const totalSelectedRecords =
@@ -129,7 +134,7 @@ export function SelectedDateRecords({
     records.weightRecords.length;
 
   return (
-    <div className="rounded-md border border-slate-300 bg-white p-3 dark:border-neutral-800 dark:bg-black">
+    <div className="win-panel rounded-md border border-slate-300 bg-white p-3 dark:border-neutral-800 dark:bg-black">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold text-slate-950 dark:text-neutral-50">
@@ -150,7 +155,7 @@ export function SelectedDateRecords({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <MarkerLegend />
+        {!windowsDesktop && !mobileLayout ? <MarkerLegend /> : null}
         {selectedDate === today ? (
           <button
             type="button"
@@ -213,13 +218,13 @@ export function SelectedDateRecords({
               markerClassName="bg-sky-400"
               actions={<DeleteItemButton label="할 일 삭제" onDelete={() => onDeleteTask(task.id)} />}
             >
-              <div className="flex min-w-0 items-center gap-2">
+              <TaskCheckContainer className={`${mobileLayout ? "mobile-record-task-check " : ""}flex min-w-0 items-center gap-2`}>
                 <input
                   type="checkbox"
                   checked={task.isDone}
                   onChange={() => onToggleTask(task.id)}
                   className="h-4 w-4 shrink-0 rounded border-slate-300 text-teal-700"
-                  aria-label="할 일 완료 전환"
+                  aria-label={mobileLayout ? `${task.text || "할 일"} 완료 전환` : "할 일 완료 전환"}
                 />
                 <div
                   className={
@@ -230,7 +235,7 @@ export function SelectedDateRecords({
                 >
                   {task.text}
                 </div>
-              </div>
+              </TaskCheckContainer>
               <div className="mt-1 text-xs text-slate-500 dark:text-neutral-400">
                 {task.isDone ? "완료" : formatTaskDueLabel(task)}
               </div>

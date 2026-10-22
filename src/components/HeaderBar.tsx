@@ -4,11 +4,13 @@ import {
   HardDrive,
   Monitor,
   RefreshCw,
+  Plus,
 } from "lucide-react";
 import { APP_TAB_LABELS, type AppTab } from "../app/navigation";
 import type { Device } from "../types";
 import type { SyncStatus } from "../lib/sync/syncTypes";
 import { getSyncStatusDescription, getSyncStatusLabel } from "./syncStatusPresentation";
+import { useMobileLayout } from "../app/MobileLayoutContext";
 
 export type SaveState = "idle" | "saving" | "saved" | "error";
 export type HeaderView = AppTab;
@@ -18,6 +20,7 @@ interface HeaderBarProps {
   device: Device | null;
   syncStatus: SyncStatus;
   saveState: SaveState;
+  onQuickCapture?: () => void;
 }
 
 const viewDescriptions: Record<AppTab, string> = {
@@ -64,13 +67,24 @@ export function HeaderBar({
   device,
   syncStatus,
   saveState,
+  onQuickCapture,
 }: HeaderBarProps) {
+  const mobileLayout = useMobileLayout();
   const SyncIcon =
     syncStatus.mode === "offline" || syncStatus.mode === "local-only"
       ? CloudOff
       : syncStatus.mode === "syncing"
         ? RefreshCw
         : Cloud;
+
+  if (mobileLayout) return <header className="os-context-bar mobile-context-bar">
+    <div className="mobile-context-title"><h1>{APP_TAB_LABELS[activeView]}</h1><span>Personal OS</span></div>
+    <details className="mobile-storage-status">
+      <summary><span role="status" className={saveState === "error" ? "mobile-danger" : ""}>{getSaveLabel(saveState)}</span><span>{getSyncStatusLabel(syncStatus.mode)}</span></summary>
+      <p>{device?.name ?? "기기 확인 중"} · {syncStatus.isOnline ? "온라인" : "오프라인"}</p>
+      <p>{getSyncStatusDescription(syncStatus)}</p>
+    </details>
+  </header>;
 
   return (
     <header className="os-context-bar shrink-0 px-3 pb-2">
@@ -84,9 +98,11 @@ export function HeaderBar({
           </p>
         </div>
 
-        <span className="shrink-0 text-xs font-medium text-slate-500 dark:text-neutral-400">
+        {onQuickCapture ? <button type="button" className="win-button win-primary" onClick={onQuickCapture} aria-label="빠른 입력 열기" title="빠른 입력 (앱 안에서 Ctrl+K)">
+          <Plus size={16} aria-hidden="true" />빠른 입력 <kbd>Ctrl K</kbd>
+        </button> : <span className="shrink-0 text-xs font-medium text-slate-500 dark:text-neutral-400">
           {APP_TAB_LABELS[activeView]}
-        </span>
+        </span>}
       </div>
 
       <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
@@ -95,7 +111,7 @@ export function HeaderBar({
             className="h-4 w-4 shrink-0 text-teal-700 dark:text-teal-300"
             aria-hidden="true"
           />
-          <span className="min-w-0 truncate">
+          <span className="min-w-0 truncate" title={device?.name}>
             {device?.name ?? "기기 확인 중"}
           </span>
         </div>
@@ -105,7 +121,7 @@ export function HeaderBar({
             className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300"
             aria-hidden="true"
           />
-          <span className="min-w-0 truncate">{getSaveLabel(saveState)}</span>
+          <span className="min-w-0 truncate" role={onQuickCapture ? "status" : undefined}>{getSaveLabel(saveState)}</span>
         </div>
 
         <div

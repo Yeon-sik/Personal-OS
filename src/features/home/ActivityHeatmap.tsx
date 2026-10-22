@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { LocalDataSnapshot } from "../../types";
 import { formatKoreanDate } from "../fitness/fitnessDate";
 import { describeActivityDay, getActivityTimeline } from "./activity";
+import { useWindowsDesktop } from "../../app/WindowsDesktopContext";
+import { useMobileLayout } from "../../app/MobileLayoutContext";
 
 const LEVEL_CLASSES = [
   "border-slate-200 bg-slate-100 dark:border-white/[0.06] dark:bg-neutral-900",
@@ -27,6 +29,10 @@ export function ActivityHeatmap({
   onOpenDate: (date: string) => void;
   onOpenProjects: () => void;
 }) {
+  const windowsDesktop = useWindowsDesktop();
+  const mobileLayout = useMobileLayout();
+  const keyboardNavigation = windowsDesktop || mobileLayout;
+  const [keyboardDate, setKeyboardDate] = useState(today);
   const timeline = useMemo(() => getActivityTimeline(snapshot, { endDate: today }), [snapshot, today]);
   const scrollContainer = useRef<HTMLDivElement>(null);
   const activityDetails = useRef<HTMLDivElement>(null);
@@ -52,14 +58,14 @@ export function ActivityHeatmap({
   }, [selectedDate]);
 
   return (
-    <section aria-labelledby="home-activity-heading" className="rounded-md border border-slate-300 bg-white p-4 dark:border-neutral-800 dark:bg-black">
+    <section aria-labelledby="home-activity-heading" className="win-panel rounded-md border border-slate-300 bg-white p-4 dark:border-neutral-800 dark:bg-black">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 id="home-activity-heading" className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-neutral-100">
             <Activity className="h-4 w-4 text-cyan-700 dark:text-cyan-300" aria-hidden="true" />
             누적 활동
           </h2>
-          <p className="mt-1 text-xs text-slate-500 dark:text-neutral-400">최근 26주 · 날짜를 눌러 활동 내역을 확인하세요.</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-neutral-400">최근 26주 · 날짜를 눌러 활동 내역을 확인하세요.{windowsDesktop ? " 방향키로 이동, Enter로 선택할 수 있습니다." : ""}</p>
         </div>
         <div className="text-xs tabular-nums text-slate-600 dark:text-neutral-300">
           <span className="font-semibold text-slate-900 dark:text-neutral-100">{timeline.totalCount.toLocaleString("ko-KR")}건</span>
@@ -68,27 +74,39 @@ export function ActivityHeatmap({
         </div>
       </div>
 
-      <div ref={scrollContainer} className="mt-4 overflow-x-auto pb-2">
-        <div className="min-w-[510px]">
-          <div className="mb-1 ml-6 grid gap-[4px] text-[10px] text-slate-500 dark:text-neutral-500" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }} aria-hidden="true">
+      {mobileLayout ? <p className="mobile-field-hint">좌우로 넘겨 날짜를 선택하세요.</p> : null}
+      <div ref={scrollContainer} data-activity-scroll={keyboardNavigation ? true : undefined} className="mt-4 overflow-x-auto pb-2">
+        <div className={windowsDesktop ? "win-heatmap-grid" : mobileLayout ? "mobile-heatmap-grid" : "min-w-[510px]"}>
+          <div className="mb-1 ml-6 grid gap-[4px] text-[10px] text-slate-500 dark:text-neutral-500" style={{ gridTemplateColumns: `repeat(${columns}, ${mobileLayout ? "48px" : "minmax(0, 1fr)"})` }} aria-hidden="true">
             {monthLabels.map((label, index) => <span key={index} className="whitespace-nowrap">{label}</span>)}
           </div>
           <div className="flex gap-2">
             <div className="grid w-4 shrink-0 grid-rows-7 gap-[4px] text-[9px] leading-[15px] text-slate-500 dark:text-neutral-500" aria-hidden="true">
               {["월", "", "수", "", "금", "", ""].map((label, index) => <span key={index}>{label}</span>)}
             </div>
-            <div className="grid flex-1 grid-flow-col grid-rows-7 gap-[4px]" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }} aria-label="일별 기록 활동">
-              {timeline.days.map((day) => {
+            <div className="grid flex-1 grid-flow-col grid-rows-7 gap-[4px]" style={{ gridTemplateColumns: `repeat(${columns}, ${mobileLayout ? "48px" : "minmax(0, 1fr)"})` }} aria-label="일별 기록 활동">
+              {timeline.days.map((day, index) => {
                 const label = `${formatKoreanDate(day.date)} · ${day.count}건 · ${describeActivityDay(day)}`;
                 return (
                   <button
                     key={day.date}
                     type="button"
+                    tabIndex={keyboardNavigation ? (day.date === keyboardDate ? 0 : -1) : undefined}
+                    data-activity-date={day.date}
                     aria-label={`${label} · 활동 내역 보기`}
                     aria-pressed={day.date === selectedDate}
                     aria-controls="home-activity-details"
                     title={label}
-                    onClick={() => setSelectedDate(day.date)}
+                    onClick={() => { setSelectedDate(day.date); if (keyboardNavigation) setKeyboardDate(day.date); }}
+                    onKeyDown={keyboardNavigation ? (event) => {
+                      const offsets: Record<string, number> = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7, Home: -index, End: timeline.days.length - 1 - index };
+                      const offset = offsets[event.key];
+                      if (offset === undefined) return;
+                      event.preventDefault();
+                      const next = timeline.days[Math.max(0, Math.min(timeline.days.length - 1, index + offset))];
+                      setKeyboardDate(next.date);
+                      scrollContainer.current?.querySelector<HTMLButtonElement>(`[data-activity-date="${next.date}"]`)?.focus();
+                    } : undefined}
                     onFocus={() => setHoveredDate(day.date)}
                     onMouseEnter={() => setHoveredDate(day.date)}
                     onBlur={() => setHoveredDate(null)}

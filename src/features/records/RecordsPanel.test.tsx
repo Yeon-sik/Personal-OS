@@ -8,6 +8,8 @@ import { RecordCalendar } from "./RecordCalendar";
 import { RecordsPanel } from "./RecordsPanel";
 import { SelectedDateRecords } from "./components/SelectedDateRecords";
 import { RecordsOverview } from "./components/RecordsOverview";
+import { WindowsDesktopContext } from "../../app/WindowsDesktopContext";
+import { MobileLayoutContext } from "../../app/MobileLayoutContext";
 
 // The overlay's document focus trap is covered by its own tests; here we verify
 // that calendar/date actions still open it with the existing write callbacks.
@@ -78,7 +80,8 @@ const fitnessNutritionSummary: FitnessNutritionSummaryV1 = {
 
 const renderers: ReactTestRenderer[] = [];
 
-function renderPanel(selectedDate = today, snapshotOverride: LocalDataSnapshot = snapshot) {
+function renderPanel(selectedDate = today, snapshotOverride: LocalDataSnapshot = snapshot, windows = false, mobile = false) {
+  const selectedTarget = { scrollIntoView: vi.fn(), focus: vi.fn() };
   const callbacks = {
     loadFinanceDailySummaries: vi.fn(async () => []),
     onAddNoteForDate: vi.fn(),
@@ -91,17 +94,18 @@ function renderPanel(selectedDate = today, snapshotOverride: LocalDataSnapshot =
   let renderer!: ReactTestRenderer;
   act(() => {
     renderer = create(
-      <RecordsPanel
+      <WindowsDesktopContext.Provider value={windows}><MobileLayoutContext.Provider value={mobile}><RecordsPanel
         selectedDate={selectedDate}
         snapshot={snapshotOverride}
         syncStatus={syncStatus}
         financeEnabled={false}
         {...callbacks}
-      />,
+      /></MobileLayoutContext.Provider></WindowsDesktopContext.Provider>,
+      { createNodeMock: (element) => element.props["aria-label"] === "선택 날짜 기록" ? selectedTarget : null },
     );
   });
   renderers.push(renderer);
-  return { renderer, callbacks };
+  return { renderer, callbacks, selectedTarget };
 }
 
 function textContent(instance: ReactTestInstance): string {
@@ -128,6 +132,40 @@ afterEach(() => {
 });
 
 describe("RecordsPanel calendar-first record hub", () => {
+  it("connects mobile date selection to its records without automatic focus or duplicate legends", () => {
+    const { renderer, callbacks, selectedTarget } = renderPanel(today, snapshot, false, true);
+    expect(renderer.root.findAllByProps({ "aria-label": "달력 표시 범례" })).toHaveLength(1);
+    act(() => renderer.root.findByType(RecordCalendar).props.onSelectDate("2026-10-03"));
+    expect(callbacks.onSelectDate).toHaveBeenCalledWith("2026-10-03");
+    expect(selectedTarget.focus).not.toHaveBeenCalled();
+    const jump = renderer.root.findAllByType("button").find((node) => node.children.join("") === "기록 보기")!;
+    act(() => jump.props.onClick());
+    expect(selectedTarget.scrollIntoView).toHaveBeenCalledWith({ block: "start" });
+    expect(selectedTarget.focus).toHaveBeenCalledWith({ preventScroll: true });
+    act(() => renderer.root.findByProps({ "aria-label": `${task.text} 완료 전환` }).props.onChange());
+    expect(callbacks.onToggleTask).toHaveBeenCalledWith(task.id);
+    const overview = renderer.root.findByType(RecordsOverview);
+    const picker = overview.findAllByType("select").find((node) => node.findAllByType("option").some((option) => textContent(option).includes("완료 1/1")))!;
+    const option = picker.findAllByType("option").find((node) => textContent(node).includes("완료 1/1"))!;
+    act(() => picker.props.onChange({ target: { value: String(option.props.value) } }));
+    expect(textContent(overview)).toContain(task.text);
+  });
+  it("connects the Windows calendar to selected records without moving focus on date selection", () => {
+    const { renderer, callbacks, selectedTarget } = renderPanel(today, snapshot, true);
+    expect(renderer.root.findAllByProps({ "aria-label": "달력 표시 범례" })).toHaveLength(1);
+    const calendar = renderer.root.findByType(RecordCalendar);
+    act(() => calendar.props.onSelectDate("2026-10-03"));
+    expect(callbacks.onSelectDate).toHaveBeenCalledWith("2026-10-03");
+    expect(selectedTarget.focus).not.toHaveBeenCalled();
+    const jump = renderer.root.findAllByType("button").find((button) => button.children.join("") === "기록 보기")!;
+    expect(jump.props["aria-controls"]).toBe(renderer.root.findByProps({ "aria-label": "선택 날짜 기록" }).props.id);
+    act(() => jump.props.onClick());
+    expect(selectedTarget.scrollIntoView).toHaveBeenCalledWith({ block: "start" });
+    expect(selectedTarget.focus).toHaveBeenCalledWith({ preventScroll: true });
+    act(() => renderer.root.findByProps({ "aria-label": "할 일 완료 전환" }).props.onChange());
+    expect(callbacks.onToggleTask).toHaveBeenCalledWith(task.id);
+  });
+
   it("keeps the existing stacked calendar first, date selection, and task completion", () => {
     const { renderer, callbacks } = renderPanel();
     const section = renderer.root.findByType("section");

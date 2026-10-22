@@ -6,6 +6,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useMemo } from "react";
+import { useMobileLayout } from "../../../app/MobileLayoutContext";
 import type { LocalDataSnapshot } from "../../../types";
 import type { SyncStatus } from "../../../lib/sync/syncTypes";
 import {
@@ -55,6 +56,7 @@ export function RecordsOverview({
   snapshot,
   syncStatus,
 }: RecordsOverviewProps) {
+  const mobileLayout = useMobileLayout();
   const selectedRange = useMemo(() => getMonthRange(selectedDate), [selectedDate]);
   const dashboardStats = useMemo(
     () => getDashboardStats(snapshot, selectedRange),
@@ -138,7 +140,7 @@ export function RecordsOverview({
       </p>
     </div>
   ) : (
-    <p>막대에 마우스를 올리거나 클릭하면 해당 날짜의 할 일 기록을 보여줍니다.</p>
+    <p>{mobileLayout ? "그래프 아래에서 날짜를 선택하면 할 일 기록을 확인할 수 있습니다." : "막대에 마우스를 올리거나 클릭하면 해당 날짜의 할 일 기록을 보여줍니다."}</p>
   );
 
   const nutritionChartDetail = activeNutritionPoint ? (
@@ -172,7 +174,7 @@ export function RecordsOverview({
       </p>
     </div>
   ) : (
-    <p>막대에 마우스를 올리거나 클릭하면 해당 날짜의 식사 기록을 보여줍니다.</p>
+    <p>{mobileLayout ? "그래프 아래에서 날짜를 선택하면 식사 기록을 확인할 수 있습니다." : "막대에 마우스를 올리거나 클릭하면 해당 날짜의 식사 기록을 보여줍니다."}</p>
   );
 
   const weightChartDetail = activeWeightPoint ? (
@@ -191,7 +193,7 @@ export function RecordsOverview({
       </p>
     </div>
   ) : (
-    <p>선 위에 마우스를 올리거나 클릭한 뒤 좌우로 움직이면 날짜별 체중 기록을 계속 볼 수 있습니다.</p>
+    <p>{mobileLayout ? "그래프 아래에서 날짜를 선택하면 체중 기록을 확인할 수 있습니다." : "선 위에 마우스를 올리거나 클릭한 뒤 좌우로 움직이면 날짜별 체중 기록을 계속 볼 수 있습니다."}</p>
   );
 
   return (

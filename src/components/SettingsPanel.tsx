@@ -15,6 +15,8 @@ import { SupabaseSettingsSection } from "./settings/SupabaseSettingsSection";
 import { DbEditorLauncher } from "../features/db-editor/DbEditorLauncher";
 import type { KnowledgeVaultRuntime } from "../features/knowledge-vault/useKnowledgeVaultRuntime";
 import { KnowledgeVaultSettingsSection } from "./settings/KnowledgeVaultSettingsSection";
+import { useWindowsDesktop } from "../app/WindowsDesktopContext";
+import { useMobileLayout } from "../app/MobileLayoutContext";
 
 interface SettingsPanelProps {
   activeDevices: Device[];
@@ -69,8 +71,11 @@ export function SettingsPanel({
   onToggleAutostart,
   knowledgeVault,
 }: SettingsPanelProps) {
+  const windowsDesktop = useWindowsDesktop();
+  const mobileLayout = useMobileLayout();
+  const groupAdvanced = windowsDesktop || mobileLayout;
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-slate-300 bg-white dark:border-neutral-800 dark:bg-black">
+    <section className={`${windowsDesktop ? "win-settings win-panel " : mobileLayout ? "mobile-settings " : ""}flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-slate-300 bg-white dark:border-neutral-800 dark:bg-black`}>
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-slate-200 px-3 text-sm font-semibold text-slate-900 dark:border-neutral-800 dark:text-neutral-100">
         <Settings
           className="h-4 w-4 text-slate-600 dark:text-neutral-300"
@@ -84,8 +89,7 @@ export function SettingsPanel({
           themeMode={themeMode}
           onChangeThemeMode={onChangeThemeMode}
         />
-        <DbEditorLauncher />
-        <KnowledgeVaultSettingsSection vault={knowledgeVault} />
+        {!groupAdvanced ? <><DbEditorLauncher /><KnowledgeVaultSettingsSection vault={knowledgeVault} /></> : null}
         <SupabaseSettingsSection
           authEmail={authEmail}
           isAuthenticated={isAuthenticated}
@@ -99,7 +103,7 @@ export function SettingsPanel({
           onSignIn={onSignIn}
           onSignOut={onSignOut}
         />
-        <GitHubSettingsSection onRefreshGitHubStatus={onRefreshGitHubStatus} />
+        {!groupAdvanced ? <GitHubSettingsSection onRefreshGitHubStatus={onRefreshGitHubStatus} /> : null}
         <DesktopIntegrationSettingsSection
           autostartEnabled={autostartEnabled}
           autostartSupported={autostartSupported}
@@ -117,6 +121,7 @@ export function SettingsPanel({
           activeDevices={activeDevices}
           currentDeviceId={currentDeviceId}
         />
+        {groupAdvanced ? <details className={mobileLayout ? "mobile-advanced-settings" : "win-advanced-settings"}><summary>고급 설정 <span>GitHub 연결 · 지식 저장소 · 데이터베이스</span></summary><div className="space-y-3 pt-3"><GitHubSettingsSection onRefreshGitHubStatus={onRefreshGitHubStatus} /><KnowledgeVaultSettingsSection vault={knowledgeVault} /><DbEditorLauncher /></div></details> : null}
       </div>
     </section>
   );

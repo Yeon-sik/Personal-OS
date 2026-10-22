@@ -1,5 +1,6 @@
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
+import { useMobileLayout } from "../../../app/MobileLayoutContext";
 
 export interface ChartInteractionHandlers {
   activeIndex: number | null;
@@ -115,9 +116,17 @@ function SeriesHitTargets({
   handlers?: ChartInteractionHandlers;
   points: InteractiveSeriesPoint[];
 }) {
+  const mobileLayout = useMobileLayout();
   if (!handlers || points.length === 0) {
     return null;
   }
+
+  if (mobileLayout) return <label className="mobile-chart-picker">날짜별 상세
+    <select value={handlers.activeIndex ?? ""} onChange={(event) => handlers.onToggleLock(Number(event.target.value))}>
+      <option value="" disabled>확인할 날짜를 선택하세요</option>
+      {points.map((point, index) => <option key={index} value={index}>{point.ariaLabel}</option>)}
+    </select>
+  </label>;
 
   return (
     <div
@@ -154,10 +163,11 @@ export function BarSeries({
   toneClassName: string;
   values: Array<number | null>;
 }) {
+  const mobileLayout = useMobileLayout();
   const maxValue = Math.max(...values.flatMap((value) => value === null ? [] : [value]), 1);
 
   return (
-    <div className="relative h-16">
+    <div className={mobileLayout ? "mobile-series" : "relative h-16"}>
       <div className="flex h-16 items-end gap-1 overflow-hidden">
         {values.map((value, index) => {
           const isActive = interaction?.activeIndex === index;
@@ -192,6 +202,7 @@ export function WeightLine({
   pointLabels?: string[];
   values: number[];
 }) {
+  const mobileLayout = useMobileLayout();
   if (values.length < 2) {
     return (
       <div className="flex h-16 items-center justify-center rounded-md border border-dashed border-slate-300 text-xs text-slate-500 dark:border-neutral-800 dark:text-neutral-400">
@@ -212,7 +223,7 @@ export function WeightLine({
   const points = circles.map((circle) => `${circle.x},${circle.y}`).join(" ");
 
   return (
-    <div className="relative h-16">
+    <div className={mobileLayout ? "mobile-series" : "relative h-16"}>
       <svg
         className="h-16 w-full overflow-visible"
         viewBox="0 0 100 64"

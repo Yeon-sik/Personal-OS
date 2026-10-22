@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Trash2 } from "lucide-react";
+import { useMobileLayout } from "../../../app/MobileLayoutContext";
+import { MobileDeleteButton } from "../../../components/MobileDeleteButton";
 
 // 선택 날짜의 기록 묶음을 제목, 개수, 빈 상태와 함께 렌더링합니다.
 export function DailySection({
@@ -46,7 +48,7 @@ export function DailyItem({
   markerClassName: string;
 }) {
   return (
-    <div className="flex min-h-10 items-start gap-2 rounded-md border border-slate-200 px-2 py-2 dark:border-neutral-800">
+    <div className="mobile-daily-item flex min-h-10 items-start gap-2 rounded-md border border-slate-200 px-2 py-2 dark:border-neutral-800">
       <span className="mt-1.5 inline-flex h-2 w-2 shrink-0 items-center justify-center">
         <span className={`block h-1.5 w-1.5 rounded-full ${markerClassName}`} />
       </span>
@@ -66,6 +68,8 @@ export function DeleteItemButton({
   label: string;
   onDelete: () => void;
 }) {
+  const mobileLayout = useMobileLayout();
+  if (mobileLayout) return <MobileDeleteButton label={label} itemName={label.replace(/ 삭제$/, "")} onDelete={onDelete} />;
   return (
     <button
       type="button"

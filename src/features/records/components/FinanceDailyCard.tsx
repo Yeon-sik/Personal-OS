@@ -21,7 +21,7 @@ export function FinanceDailyCard({
   selectedFinance,
 }: FinanceDailyCardProps) {
   return (
-    <div className="rounded-md border border-slate-300 bg-white p-3 dark:border-neutral-800 dark:bg-black">
+    <div className="win-panel rounded-md border border-slate-300 bg-white p-3 dark:border-neutral-800 dark:bg-black">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-slate-950 dark:text-neutral-50">

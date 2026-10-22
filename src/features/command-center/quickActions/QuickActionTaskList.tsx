@@ -45,8 +45,12 @@ export function QuickActionTaskList({
         <input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && event.nativeEvent.isComposing) event.preventDefault();
+          }}
           className="h-9 min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 dark:border-neutral-800 dark:bg-black dark:text-neutral-100 dark:placeholder:text-neutral-500"
           placeholder="이 날짜에 할 일 추가"
+          aria-label="추가할 할 일"
         />
         <button
           type="submit"

@@ -96,6 +96,16 @@ export function ChecklistPanel({
       clearDragState();
     }
 
+    function handleWindowPointerCancel() {
+      clearDragState();
+    }
+
+    function handleWindowKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape" || event.isComposing) return;
+      event.preventDefault();
+      clearDragState();
+    }
+
     const previousUserSelect = document.body.style.userSelect;
     document.body.style.userSelect = "none";
     window.addEventListener("pointermove", handleWindowPointerMove, {
@@ -105,9 +115,11 @@ export function ChecklistPanel({
     window.addEventListener("pointerup", handleWindowPointerUp, {
       capture: true,
     });
-    window.addEventListener("pointercancel", handleWindowPointerUp, {
+    window.addEventListener("pointercancel", handleWindowPointerCancel, {
       capture: true,
     });
+    window.addEventListener("keydown", handleWindowKeyDown, { capture: true });
+    window.addEventListener("blur", handleWindowPointerCancel);
 
     return () => {
       document.body.style.userSelect = previousUserSelect;
@@ -117,9 +129,11 @@ export function ChecklistPanel({
       window.removeEventListener("pointerup", handleWindowPointerUp, {
         capture: true,
       });
-      window.removeEventListener("pointercancel", handleWindowPointerUp, {
+      window.removeEventListener("pointercancel", handleWindowPointerCancel, {
         capture: true,
       });
+      window.removeEventListener("keydown", handleWindowKeyDown, { capture: true });
+      window.removeEventListener("blur", handleWindowPointerCancel);
     };
   }, [draggedTaskId, onReorder]);
 
@@ -238,7 +252,7 @@ export function ChecklistPanel({
   }
 
   return (
-    <section className="flex min-h-0 flex-col overflow-hidden rounded-md border border-slate-300 bg-white dark:border-neutral-800 dark:bg-black">
+    <section className="win-task-panel win-panel flex min-h-0 flex-col overflow-hidden rounded-md border border-slate-300 bg-white dark:border-neutral-800 dark:bg-black">
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-200 px-3 dark:border-neutral-800">
         <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-900 dark:text-neutral-100">
           <CheckSquare
@@ -254,7 +268,7 @@ export function ChecklistPanel({
           type="button"
           onClick={handleHeaderAction}
           disabled={isDraftFormVisible && !canSubmitDraft}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-indigo-700 text-white transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-500"
+          className="win-task-add inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-indigo-700 text-white transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-500"
           title={isDraftFormVisible ? "할 일 생성" : "오늘 할 일 입력 열기"}
           aria-label={
             isDraftFormVisible ? "할 일 생성" : "오늘 할 일 입력 열기"
@@ -280,6 +294,7 @@ export function ChecklistPanel({
         onDraftDueDateChange={handleDraftDueDateChange}
         onDraftDueTimeChange={setDraftDueTime}
         onDraftModeChange={setDraftMode}
+        onSubmitDraft={submitDraft}
       />
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-2">
@@ -305,6 +320,7 @@ export function ChecklistPanel({
             today={today}
             onDelete={onDelete}
             onPointerDown={handlePointerDown}
+            onReorder={onReorder}
             onToggle={onToggle}
             onUpdatePlannedDate={onUpdatePlannedDate}
             onUpdateSchedule={onUpdateSchedule}
@@ -334,6 +350,7 @@ export function ChecklistPanel({
             today={today}
             onDelete={onDelete}
             onPointerDown={handlePointerDown}
+            onReorder={onReorder}
             onToggle={onToggle}
             onUpdatePlannedDate={onUpdatePlannedDate}
             onUpdateSchedule={onUpdateSchedule}

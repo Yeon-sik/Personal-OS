@@ -75,9 +75,47 @@ beforeEach(() => {
   act(() => { renderer = create(<App />); });
 });
 
-afterEach(() => { act(() => renderer.unmount()); });
+afterEach(() => { act(() => renderer.unmount()); vi.unstubAllGlobals(); });
 
 describe("Personal OS four-tab navigation", () => {
+  it("uses the mobile shell while preserving all routes and named quick capture", () => {
+    act(() => renderer.unmount());
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Linux; Android 14) Mobile" });
+    vi.stubGlobal("window", { matchMedia: () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }) });
+    act(() => { renderer = create(<App />); });
+    expect(renderer.root.findAll((node) => node.type === "div" && String(node.props.className).split(" ").includes("mobile-layout"))).toHaveLength(1);
+    const capture = renderer.root.findByProps({ "aria-label": "빠른 입력 열기" });
+    expect(capture.findByType("span").children.join("")).toBe("빠른 입력");
+    act(() => capture.props.onClick());
+    expect(harness.quickOpen).toHaveBeenCalledOnce();
+    clickButton("기록", "주요 화면");
+    clickButton("메모", "기록 분류");
+    expect(renderer.root.findByProps({ "data-panel": "memo" })).toBeDefined();
+    clickButton("프로젝트", "주요 화면");
+    clickButton("작업 공간 열기");
+    expect(harness.openWorkspace).toHaveBeenCalledWith({ mode: "view", projectId: "project-1" });
+    clickButton("설정", "주요 화면");
+    clickButton("수동 동기화");
+    expect(harness.runtime.manualSync).toHaveBeenCalledOnce();
+  });
+  it("keeps all four routes and quick capture available in the Windows layout", () => {
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" });
+    act(() => renderer.update(<App />));
+    expect(renderer.root.findAllByProps({ "aria-label": "주요 화면" })).toHaveLength(1);
+    const headerCapture = renderer.root.findByType("header").findByProps({ "aria-label": "빠른 입력 열기" });
+    act(() => headerCapture.props.onClick());
+    expect(harness.quickOpen).toHaveBeenCalledOnce();
+    clickButton("기록", "주요 화면");
+    clickButton("메모", "기록 분류");
+    expect(renderer.root.findByProps({ "data-panel": "memo" })).toBeDefined();
+    clickButton("프로젝트", "주요 화면");
+    clickButton("작업 공간 열기");
+    expect(harness.openWorkspace).toHaveBeenCalledWith({ mode: "view", projectId: "project-1" });
+    clickButton("설정", "주요 화면");
+    clickButton("수동 동기화");
+    expect(harness.runtime.manualSync).toHaveBeenCalledOnce();
+  });
+
   it("starts at home and keeps exactly four primary destinations visible", () => {
     expect(renderer.root.findByProps({ "data-panel": "home" })).toBeDefined();
     const nav = renderer.root.findByProps({ "aria-label": "주요 화면" });

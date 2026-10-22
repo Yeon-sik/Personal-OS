@@ -1,5 +1,9 @@
 import { Clock3, Plus, StickyNote, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { useWindowsDesktop } from "../../app/WindowsDesktopContext";
+import { WindowsMemoPanel } from "./WindowsMemoPanel";
+import { useMobileLayout } from "../../app/MobileLayoutContext";
+import { MobileMemoPanel } from "./MobileMemoPanel";
 import type { Note } from "../../types";
 import {
   getNoteDisplayTitle,
@@ -8,7 +12,7 @@ import {
   serializeNoteEditorHtmlToMarkdown,
 } from "./noteService";
 
-interface MemoPanelProps {
+export interface MemoPanelProps {
   notes: Note[];
   selectedNote: Note | null;
   selectedNoteId: string | null;
@@ -29,7 +33,13 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
-export function MemoPanel({
+export function MemoPanel(props: MemoPanelProps) {
+  const windowsDesktop = useWindowsDesktop();
+  const mobileLayout = useMobileLayout();
+  return windowsDesktop ? <WindowsMemoPanel {...props} /> : mobileLayout ? <MobileMemoPanel {...props} /> : <CompactMemoPanel {...props} />;
+}
+
+function CompactMemoPanel({
   notes,
   selectedNote,
   selectedNoteId,

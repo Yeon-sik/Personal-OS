@@ -4,6 +4,7 @@ import type {
   RefObject,
 } from "react";
 import { CalendarDays, Clock3 } from "lucide-react";
+import { useMobileLayout } from "../../../app/MobileLayoutContext";
 
 export type DraftMode = "today" | "deadline";
 
@@ -19,6 +20,7 @@ interface TaskDraftFormProps {
   onDraftDueDateChange: (value: string) => void;
   onDraftDueTimeChange: (value: string) => void;
   onDraftModeChange: (mode: DraftMode) => void;
+  onSubmitDraft?: () => void;
 }
 
 export function TaskDraftForm({
@@ -33,26 +35,27 @@ export function TaskDraftForm({
   onDraftDueDateChange,
   onDraftDueTimeChange,
   onDraftModeChange,
+  onSubmitDraft,
 }: TaskDraftFormProps) {
+  const mobileLayout = useMobileLayout();
+  if (!isVisible) return null;
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (draft.trim()) onSubmitDraft?.();
   }
 
   return (
     <form
       onSubmit={handleSubmit}
       onBlur={onBlur}
-      className={
-        isVisible
-          ? "shrink-0 border-b border-slate-200 bg-slate-50 p-2 dark:border-neutral-800 dark:bg-neutral-950"
-          : "sr-only"
-      }
+      className="shrink-0 border-b border-slate-200 bg-slate-50 p-2 dark:border-neutral-800 dark:bg-neutral-950"
     >
       <div className="mb-2 grid grid-cols-2 gap-1 rounded-md border border-slate-200 bg-white p-1 dark:border-neutral-800 dark:bg-black">
         <button
           type="button"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => onDraftModeChange("today")}
+          aria-pressed={mobileLayout ? draftMode === "today" : undefined}
           className={
             draftMode === "today"
               ? "h-8 rounded-md bg-fuchsia-600 text-xs font-semibold text-white"
@@ -65,6 +68,7 @@ export function TaskDraftForm({
           type="button"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => onDraftModeChange("deadline")}
+          aria-pressed={mobileLayout ? draftMode === "deadline" : undefined}
           className={
             draftMode === "deadline"
               ? "h-8 rounded-md bg-sky-700 text-xs font-semibold text-white"
@@ -74,7 +78,7 @@ export function TaskDraftForm({
           기한 내 할 일
         </button>
       </div>
-      <label htmlFor="task-draft" className="sr-only">
+      <label htmlFor="task-draft" className={mobileLayout ? "mobile-draft-label" : "sr-only"}>
         할 일
       </label>
       <input
@@ -86,6 +90,8 @@ export function TaskDraftForm({
         placeholder={
           draftMode === "today" ? "오늘 실제로 할 일" : "마감일이 있는 할 일"
         }
+        enterKeyHint={mobileLayout ? "done" : undefined}
+        onKeyDown={(event) => { if (event.key === "Enter" && event.nativeEvent.isComposing) event.preventDefault(); }}
       />
       {draftMode === "deadline" ? (
         <div className="mt-2 grid grid-cols-1 gap-1.5">
@@ -127,6 +133,7 @@ export function TaskDraftForm({
           </label>
         </div>
       ) : null}
+      <button type="submit" className={mobileLayout ? "mobile-primary mobile-draft-submit" : "win-button win-primary mt-2 w-full rounded-md bg-indigo-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"} disabled={!draft.trim()}>할 일 저장</button>
     </form>
   );
 }

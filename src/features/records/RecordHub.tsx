@@ -11,8 +11,8 @@ interface RecordHubProps {
 
 export function RecordHub({ activeSection, selectedDate, onChangeSection, children }: RecordHubProps) {
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="shrink-0">
+    <div className="os-record-hub flex h-full min-h-0 flex-col gap-3">
+      <div className="os-record-heading shrink-0">
         <h2 className="text-base font-semibold text-slate-950 dark:text-neutral-100">기록</h2>
         <p className="mt-1 text-xs text-slate-500 dark:text-neutral-400">
           달력에서 하루를 살펴보고, 필요한 기록을 이어가세요.

@@ -8,6 +8,8 @@ import { getFitnessSummary } from "../fitness-summary/fitnessSummary";
 import { getRecordsForDate } from "../records/recordAggregation";
 import { BriefMetric } from "../records/components/InteractiveRecordsMetrics";
 import { ActivityHeatmap } from "./ActivityHeatmap";
+import { useWindowsDesktop } from "../../app/WindowsDesktopContext";
+import { useMobileLayout } from "../../app/MobileLayoutContext";
 
 export interface HomePanelProps {
   snapshot: LocalDataSnapshot;
@@ -19,6 +21,8 @@ export interface HomePanelProps {
 }
 
 export function HomePanel({ snapshot, syncStatus, onOpenRecords, onOpenProjects, onQuickCapture, today = formatLocalDate() }: HomePanelProps) {
+  const windowsDesktop = useWindowsDesktop();
+  const mobileLayout = useMobileLayout();
   const todayRecords = useMemo(() => getRecordsForDate(snapshot, today), [snapshot, today]);
   const fitness = useMemo(() => getFitnessSummary(snapshot, today), [snapshot, today]);
   const todayPlannedTasks = todayRecords.tasks.filter((task) => task.plannedDate === today);
@@ -38,8 +42,32 @@ export function HomePanel({ snapshot, syncStatus, onOpenRecords, onOpenProjects,
     { label: "빠른 입력", detail: "생각과 할 일 바로 저장", icon: Plus, run: onQuickCapture },
   ];
 
+  if (windowsDesktop) return (
+    <section aria-label="홈" className="win-home">
+      <header className="win-page-heading"><div><p>{formatKoreanDate(today)}</p><h2>오늘, 하나씩 이어가세요.</h2></div><span className="win-status-pill">{getSyncStatusLabel(syncStatus.mode)}</span></header>
+      <div className="win-home-overview">
+        <section className="win-card win-next-tasks" aria-labelledby="windows-next-heading">
+          <div className="win-card-heading"><h3 id="windows-next-heading"><CheckCheck size={18} aria-hidden="true" />다음 할 일</h3><button type="button" className="win-text-button" onClick={() => onOpenRecords("tasks")}>모두 보기 <ArrowUpRight size={14} aria-hidden="true" /></button></div>
+          {remainingTasks.length ? <ul>{remainingTasks.slice(0, 3).map((task) => <li key={task.id}><span aria-hidden="true" className="win-task-marker" /><span>{task.text}</span></li>)}</ul> : <div className="win-task-empty"><p>오늘 예정된 할 일이 없습니다.</p><button type="button" className="win-button" onClick={onQuickCapture}><Plus size={16} aria-hidden="true" />다음 할 일 추가</button></div>}
+          <p className="win-summary-line">오늘 남은 일 <strong>{remainingTasks.length}개</strong><span aria-hidden="true"> · </span>완료 <strong>{completedTasks.length}개</strong></p>
+        </section>
+        <section className="win-card" aria-labelledby="windows-state-heading">
+          <div className="win-card-heading"><h3 id="windows-state-heading">확인할 상태</h3></div>
+          <button type="button" onClick={onOpenProjects} className="win-state-link"><div><strong>진행 프로젝트 {activeProjects.length}개</strong><span>작업 묶음 {activeWorkstreams.length}개 · {blockedActions > 0 ? `막힌 행동 ${blockedActions}개` : "막힌 행동 없음"}</span></div><ArrowUpRight size={16} aria-hidden="true" /></button>
+          <button type="button" onClick={() => onOpenRecords("fitness", today)} className="win-state-link"><div><strong>건강 · 오늘 운동 {fitness.todayHasWorkout ? "기록 있음" : "기록 없음"}</strong><span>최근 7일 운동 {fitness.weeklyWorkoutCount}회{fitness.latestWeightKg === null ? "" : ` · 체중 ${fitness.latestWeightKg.toLocaleString("ko-KR")} kg`}</span></div><ArrowUpRight size={16} aria-hidden="true" /></button>
+        </section>
+      </div>
+      <section aria-label="빠른 이동과 행동" className="win-home-actions">{quickActions.map(({ label, detail, icon: Icon, run }) => <button key={label} type="button" onClick={run}><Icon size={18} aria-hidden="true" /><div><strong>{label}</strong><span>{detail}</span></div><ArrowUpRight size={14} aria-hidden="true" /></button>)}</section>
+      <details className="win-activity-details" onToggle={(event) => {
+        if (!event.currentTarget.open) return;
+        const scroller = event.currentTarget.querySelector<HTMLElement>("[data-activity-scroll]");
+        if (scroller) scroller.scrollLeft = scroller.scrollWidth;
+      }}><summary>활동 기록 <span>최근 26주 흐름과 날짜별 기록 보기</span></summary><ActivityHeatmap snapshot={snapshot} today={today} onOpenDate={(date) => onOpenRecords("all", date)} onOpenProjects={onOpenProjects} /></details>
+    </section>
+  );
+
   return (
-    <section aria-label="홈" className="h-full min-h-0 overflow-y-auto pr-1">
+    <section aria-label="홈" className={`${mobileLayout ? "mobile-home " : ""}h-full min-h-0 overflow-y-auto pr-1`}>
       <div className="mx-auto max-w-6xl space-y-4 pb-6">
         <section aria-labelledby="home-today-heading" className="rounded-md border border-slate-300 bg-slate-950 p-4 text-white dark:border-neutral-800 dark:bg-neutral-950">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -71,7 +99,7 @@ export function HomePanel({ snapshot, syncStatus, onOpenRecords, onOpenProjects,
           ))}
         </section>
 
-        <ActivityHeatmap snapshot={snapshot} today={today} onOpenDate={(date) => onOpenRecords("all", date)} onOpenProjects={onOpenProjects} />
+        {!mobileLayout ? <ActivityHeatmap snapshot={snapshot} today={today} onOpenDate={(date) => onOpenRecords("all", date)} onOpenProjects={onOpenProjects} /> : null}
 
         <div className="grid gap-3 lg:grid-cols-2">
           <section aria-labelledby="home-next-heading" className="rounded-md border border-slate-300 bg-white p-4 dark:border-neutral-800 dark:bg-black">
@@ -104,6 +132,12 @@ export function HomePanel({ snapshot, syncStatus, onOpenRecords, onOpenProjects,
             </button>
           </section>
         </div>
+        {mobileLayout ? <details className="mobile-activity-details" onToggle={(event) => {
+          if (event.currentTarget.open) {
+            const scroller = event.currentTarget.querySelector<HTMLElement>("[data-activity-scroll]");
+            if (scroller) scroller.scrollLeft = scroller.scrollWidth;
+          }
+        }}><summary>활동 기록 <span>최근 26주</span></summary><ActivityHeatmap snapshot={snapshot} today={today} onOpenDate={(date) => onOpenRecords("all", date)} onOpenProjects={onOpenProjects} /></details> : null}
       </div>
     </section>
   );

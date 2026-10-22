@@ -1,5 +1,8 @@
 import { useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useWindowsDesktop } from "../../app/WindowsDesktopContext";
+import { useMobileLayout } from "../../app/MobileLayoutContext";
+import { MarkerLegend } from "./components/RecordMarkerLegend";
 import { formatLocalDate, parseDateInput } from "../fitness/fitnessDate";
 import {
   formatCompactKrw,
@@ -94,6 +97,7 @@ function renderTaskMarker(taskMarker: CalendarTaskMarker) {
   if (taskMarker.dueCount > 0) {
     return (
       <span
+        data-record-layer="tasks"
         title={`할 일 ${taskMarker.dueCount}개 마감`}
         className="block h-full w-full rounded-sm border-2 border-transparent bg-sky-400"
       />
@@ -103,6 +107,7 @@ function renderTaskMarker(taskMarker: CalendarTaskMarker) {
   if (taskMarker.activeCount > 0) {
     return (
       <span
+        data-record-layer="tasks"
         title={`진행 중인 할 일 ${taskMarker.activeCount}개`}
         className="flex h-full w-full min-w-0 items-center justify-center gap-1 rounded-sm border-2 border-slate-200 bg-transparent px-1 dark:border-neutral-700"
       >
@@ -115,19 +120,20 @@ function renderTaskMarker(taskMarker: CalendarTaskMarker) {
   }
 
   return (
-    <span className="block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700" />
+    <span data-record-layer="tasks" className="block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700" />
   );
 }
 
 function renderPlannedDoneMarker(taskMarker: CalendarTaskMarker) {
   if (!taskMarker.allPlannedDone) {
     return (
-      <span className="block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700" />
+      <span data-record-layer="planned-done" className="block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700" />
     );
   }
 
   return (
     <span
+      data-record-layer="planned-done"
       title={`오늘 할 일 ${taskMarker.completedPlannedCount}/${taskMarker.plannedCount} 완료`}
       className="block h-full w-full rounded-sm border-2 border-transparent bg-[#FF00FF]"
     />
@@ -142,6 +148,9 @@ export function RecordCalendar({
   onSelectDate,
   onVisibleMonthChange,
 }: RecordCalendarProps) {
+  const windowsDesktop = useWindowsDesktop();
+  const mobileLayout = useMobileLayout();
+  const describedDays = windowsDesktop || mobileLayout;
   const today = formatLocalDate();
   const visibleMonthDate = useMemo(
     () => parseDateInput(visibleMonth),
@@ -168,7 +177,7 @@ export function RecordCalendar({
   }
 
   return (
-    <div className="rounded-md border border-slate-300 bg-white p-2 dark:border-neutral-800 dark:bg-black">
+    <div className={`${windowsDesktop ? "win-calendar " : mobileLayout ? "mobile-calendar " : ""}rounded-md border border-slate-300 bg-white p-2 dark:border-neutral-800 dark:bg-black`}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <button
           type="button"
@@ -200,6 +209,8 @@ export function RecordCalendar({
         </button>
       </div>
 
+      {mobileLayout ? <p className="mobile-calendar-scroll-hint">달력을 좌우로 넘겨 모든 요일을 확인하세요.</p> : null}
+      <div className={mobileLayout ? "mobile-calendar-scroll" : undefined}>
       <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] font-semibold text-slate-500 dark:text-neutral-400">
         {weekDays.map((day) => (
           <div key={day} className="py-1">
@@ -207,18 +218,27 @@ export function RecordCalendar({
           </div>
         ))}
       </div>
-      <div className="mt-0.5 grid grid-cols-7 gap-0.5">
+      <div className={`${windowsDesktop ? "win-calendar-days " : ""}mt-0.5 grid grid-cols-7 gap-0.5`}>
         {monthCells.map((date, index) => {
           const markers = date ? markerByDate[date] : null;
           const finance = date ? financeByDate[date] : null;
           const isSelected = date === selectedDate;
           const isToday = date === today;
           const taskMarker = markers?.tasks ?? emptyTaskMarker;
+          const recordLabels = markerStyles.filter((marker) => markers?.[marker.key]).map((marker) => marker.label);
+          if (taskMarker.dueCount) recordLabels.push(`할 일 ${taskMarker.dueCount}개 마감`);
+          else if (taskMarker.activeCount) recordLabels.push(`진행 중인 할 일 ${taskMarker.activeCount}개`);
+          if (taskMarker.allPlannedDone) recordLabels.push(`오늘 할 일 ${taskMarker.completedPlannedCount}/${taskMarker.plannedCount} 완료`);
+          const dayLabel = `${date}${isToday ? " 오늘" : ""} · ${recordLabels.join(", ") || "기록 없음"}${finance?.incomeKrw ? ` · 수입 ${finance.incomeKrw.toLocaleString("ko-KR")}원` : ""}${finance?.expenseKrw ? ` · 지출 ${finance.expenseKrw.toLocaleString("ko-KR")}원` : ""}`;
 
           return date ? (
             <button
               key={date}
               type="button"
+              aria-label={describedDays ? dayLabel : undefined}
+              aria-pressed={describedDays ? isSelected : undefined}
+              title={describedDays ? dayLabel : undefined}
+              data-calendar-day={date}
               onClick={() => {
                 onSelectDate(date);
               }}
@@ -249,8 +269,10 @@ export function RecordCalendar({
                     : "\u00a0"}
                 </span>
               </span>
-              <span className="grid min-h-0 flex-1 w-full grid-rows-6 gap-0.5 overflow-hidden">
+              {/* Fixed layers, including empty slots, are the calendar's core visual identity. */}
+              <span data-calendar-stack="true" className="grid min-h-0 flex-1 w-full grid-rows-6 gap-0.5 overflow-hidden" aria-hidden={describedDays ? true : undefined}>
                 <span
+                  data-record-layer="weights"
                   title={markers?.weights ? "체중" : undefined}
                   className={
                     markers?.weights
@@ -260,6 +282,7 @@ export function RecordCalendar({
                   aria-hidden={!markers?.weights}
                 />
                 <span
+                  data-record-layer="meals"
                   title={markers?.meals ? "식단" : undefined}
                   className={
                     markers?.meals
@@ -269,6 +292,7 @@ export function RecordCalendar({
                   aria-hidden={!markers?.meals}
                 />
                 <span
+                  data-record-layer="workouts"
                   title={markers?.workouts ? "운동" : undefined}
                   className={
                     markers?.workouts
@@ -280,6 +304,7 @@ export function RecordCalendar({
                 {renderTaskMarker(taskMarker)}
                 {renderPlannedDoneMarker(taskMarker)}
                 <span
+                  data-record-layer="notes"
                   title={markers?.notes ? "메모" : undefined}
                   className={
                     markers?.notes
@@ -298,6 +323,8 @@ export function RecordCalendar({
           );
         })}
       </div>
+      </div>
+      {describedDays ? <div className={mobileLayout ? "mobile-calendar-help" : "win-calendar-help"}><p>날짜를 선택한 뒤 ‘기록 보기’로 해당 날짜의 기록을 확인하세요.</p><MarkerLegend /></div> : null}
     </div>
   );
 }

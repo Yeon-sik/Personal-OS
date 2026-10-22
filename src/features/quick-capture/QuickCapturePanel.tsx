@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import type { DesktopQuickCaptureShortcutStatus } from "../../lib/desktop/quickCapture";
 import type { QuickCaptureMode } from "./quickCaptureParser";
+import { useWindowsDesktop } from "../../app/WindowsDesktopContext";
+import { useMobileLayout } from "../../app/MobileLayoutContext";
 
 interface QuickCapturePanelProps {
   isOpen: boolean;
@@ -46,6 +48,11 @@ export function QuickCapturePanel({
   onModeChange,
   onSave,
 }: QuickCapturePanelProps) {
+  const windowsDesktop = useWindowsDesktop();
+  const mobileLayout = useMobileLayout();
+  const accessibleInput = windowsDesktop || mobileLayout;
+  const inputId = mobileLayout ? "mobile-capture-input" : "windows-capture-input";
+  const errorId = mobileLayout ? "mobile-capture-error" : "windows-capture-error";
   const [draft, setDraft] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -57,10 +64,15 @@ export function QuickCapturePanel({
     }
 
     setSaveError(null);
-    window.requestAnimationFrame(() => {
+    const previousFocus = accessibleInput && document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = window.requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
-  }, [isOpen]);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [isOpen, accessibleInput]);
 
   if (!isOpen) {
     return null;
@@ -72,6 +84,7 @@ export function QuickCapturePanel({
 
       if (!saved) {
         setSaveError("입력 내용을 확인하세요.");
+        if (accessibleInput) inputRef.current?.focus();
         return;
       }
 
@@ -83,6 +96,7 @@ export function QuickCapturePanel({
   }
 
   function handlePanelKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.nativeEvent.isComposing) return;
     if (event.key === "Escape") {
       event.preventDefault();
       onClose();
@@ -91,8 +105,9 @@ export function QuickCapturePanel({
 
     if (
       event.key === "Enter" &&
-      !event.shiftKey &&
-      !event.nativeEvent.isComposing
+      (!accessibleInput || event.target === inputRef.current) &&
+      (!mobileLayout || event.ctrlKey || event.metaKey) &&
+      !event.shiftKey
     ) {
       event.preventDefault();
       submitDraft();
@@ -122,7 +137,7 @@ export function QuickCapturePanel({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-3 backdrop-blur-sm max-sm:items-end max-sm:p-0"
+      className={`${windowsDesktop ? "win-capture-overlay " : mobileLayout ? "mobile-dialog-overlay mobile-capture-overlay " : ""}fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-3 backdrop-blur-sm max-sm:items-end max-sm:p-0`}
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
@@ -143,8 +158,8 @@ export function QuickCapturePanel({
             <div className="text-sm font-semibold tracking-normal">
               빠른 입력
             </div>
-            <div className="mt-0.5 truncate text-[11px] text-neutral-400">
-              {getShortcutLabel(shortcutStatus)}
+            <div className={windowsDesktop ? "win-shortcut-hint" : "mt-0.5 truncate text-[11px] text-neutral-400"}>
+              {mobileLayout ? "생각과 할 일을 이 기기에 저장하세요." : windowsDesktop ? `앱 안 Ctrl+K${shortcutStatus.supported ? shortcutStatus.registered ? ` · 전역 ${shortcutStatus.shortcut}` : " · 전역 단축키 사용 불가" : ""}` : getShortcutLabel(shortcutStatus)}
             </div>
           </div>
 
@@ -159,7 +174,7 @@ export function QuickCapturePanel({
           </button>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 rounded-md border border-white/10 bg-black p-1">
+        <div className={`${windowsDesktop ? "win-capture-modes " : mobileLayout ? "mobile-capture-modes " : ""}mt-3 grid grid-cols-2 rounded-md border border-white/10 bg-black p-1`}>
           <button
             type="button"
             onClick={() => onModeChange("task")}
@@ -188,26 +203,31 @@ export function QuickCapturePanel({
           </button>
         </div>
 
+        {accessibleInput ? <label className={mobileLayout ? "mobile-capture-label" : "win-capture-label"} htmlFor={inputId}>{mode === "memo" ? "메모 내용" : "할 일 내용"}<span>{mobileLayout ? "Enter 줄바꿈 · 저장 버튼으로 완료" : "Enter 저장 · Shift+Enter 줄바꿈"}</span></label> : null}
         <textarea
+          id={accessibleInput ? inputId : undefined}
+          aria-invalid={accessibleInput ? Boolean(saveError) : undefined}
+          aria-describedby={accessibleInput && saveError ? errorId : undefined}
+          enterKeyHint={mobileLayout ? "enter" : undefined}
           ref={inputRef}
           value={draft}
           onChange={(event) => {
             setDraft(event.target.value);
             setSaveError(null);
           }}
-          rows={5}
+          rows={mobileLayout ? 3 : 5}
           className="mt-3 min-h-32 w-full resize-none rounded-md border border-white/10 bg-black px-3 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-neutral-600 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
           placeholder={mode === "memo" ? "메모 입력" : "할 일 입력"}
         />
 
         <div className="mt-3 flex min-h-9 items-center gap-2">
-          <div className="min-w-0 flex-1 text-xs text-red-300">
+          <div className="min-w-0 flex-1 text-xs text-red-300" id={accessibleInput ? errorId : undefined} role={accessibleInput ? "alert" : undefined}>
             {saveError}
           </div>
           <button
             type="button"
             onClick={submitDraft}
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md bg-teal-400 px-3 text-sm font-semibold text-black transition hover:bg-teal-300"
+            className={windowsDesktop ? "win-button win-primary" : mobileLayout ? "mobile-primary" : "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md bg-teal-400 px-3 text-sm font-semibold text-black transition hover:bg-teal-300"}
           >
             <Send className="h-4 w-4" aria-hidden="true" />
             <span>저장</span>

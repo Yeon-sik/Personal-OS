@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Command } from "lucide-react";
+import { Command, Plus } from "lucide-react";
 import type { LocalDataSnapshot } from "../types";
 import { HeaderBar } from "../components/HeaderBar";
 import { BottomNavigation } from "../components/BottomNavigation";
@@ -23,8 +23,15 @@ import {
 import { useLocalSyncMemo } from "./useLocalSyncMemo";
 import { useThemeMode } from "./useThemeMode";
 import { APP_TAB_LABELS, type AppTab, type RecordSection } from "./navigation";
+import { isWindowsDesktop, WindowsDesktopContext } from "./WindowsDesktopContext";
+import "./windows-desktop.css";
+import { MobileLayoutContext, useMobileLayoutState, useMobileViewport } from "./MobileLayoutContext";
+import "./mobile.css";
 
 export function App() {
+  const windowsDesktop = isWindowsDesktop();
+  const mobileLayout = useMobileLayoutState(windowsDesktop);
+  const mobileShellRef = useMobileViewport(mobileLayout);
   const memo = useLocalSyncMemo();
   const github = useGitHubIntegration();
   const { setThemeMode, themeMode } = useThemeMode();
@@ -133,17 +140,22 @@ export function App() {
   }
 
   return (
-    <div className="app-shell personal-os-shell flex w-full min-w-0 justify-center bg-slate-200 text-slate-900 dark:bg-black dark:text-neutral-100">
-      <div className="relative flex h-full min-h-0 w-full max-w-[520px] min-w-0 flex-col border-x border-slate-300 bg-slate-100 shadow-panel dark:border-neutral-800 dark:bg-black dark:shadow-none">
+    <WindowsDesktopContext.Provider value={windowsDesktop}>
+    <MobileLayoutContext.Provider value={mobileLayout}>
+    <div ref={mobileShellRef} className={`app-shell personal-os-shell flex w-full min-w-0 justify-center bg-slate-200 text-slate-900 dark:bg-black dark:text-neutral-100${windowsDesktop ? " windows-desktop" : mobileLayout ? " mobile-layout" : ""}`}>
+      <div className="os-window-frame relative flex h-full min-h-0 w-full max-w-[520px] min-w-0 flex-col border-x border-slate-300 bg-slate-100 shadow-panel dark:border-neutral-800 dark:bg-black dark:shadow-none">
         <HeaderBar
           activeView={activeView}
           device={memo.device}
           syncStatus={memo.syncStatus}
           saveState={memo.saveState}
+          onQuickCapture={windowsDesktop ? quickCapture.open : undefined}
         />
 
         {memo.error ? <StatusBanner message={memo.error} /> : null}
 
+        <div className={windowsDesktop ? "windows-workspace" : "contents"}>
+        {windowsDesktop ? <BottomNavigation activeTab={activeView} onChangeTab={setActiveView} /> : null}
         <main className="os-main min-h-0 flex-1 overflow-hidden px-3 pb-2 pt-3" aria-label={APP_TAB_LABELS[activeView]}>
           <div className="os-tab-panel h-full min-h-0">
             {activeView === "home" ? (
@@ -279,18 +291,19 @@ export function App() {
             ) : null}
           </div>
         </main>
+        </div>
 
-        <BottomNavigation activeTab={activeView} onChangeTab={setActiveView} />
+        {!windowsDesktop ? <BottomNavigation activeTab={activeView} onChangeTab={setActiveView} /> : null}
 
-        <button
+        {!windowsDesktop ? <button
           type="button"
           onClick={quickCapture.open}
           className="os-quick-capture inline-flex items-center justify-center rounded-full bg-neutral-950 text-white shadow-lg shadow-black/20 hover:bg-neutral-800 dark:bg-neutral-100 dark:text-black dark:hover:bg-white"
           aria-label="빠른 입력 열기"
           title="빠른 입력"
         >
-          <Command className="h-5 w-5" aria-hidden="true" />
-        </button>
+          {mobileLayout ? <><Plus className="h-5 w-5" aria-hidden="true" /><span>빠른 입력</span></> : <Command className="h-5 w-5" aria-hidden="true" />}
+        </button> : null}
 
         <QuickCapturePanel
           isOpen={quickCapture.isOpen}
@@ -302,5 +315,7 @@ export function App() {
         />
       </div>
     </div>
+    </MobileLayoutContext.Provider>
+    </WindowsDesktopContext.Provider>
   );
 }

@@ -9,6 +9,7 @@ import {
 } from "./QuickActionModeTabs";
 import { QuickActionMemoEditor } from "./QuickActionMemoEditor";
 import { QuickActionTaskList } from "./QuickActionTaskList";
+import { useMobileLayout } from "../../../app/MobileLayoutContext";
 
 interface QuickActionOverlayProps {
   isBackfill?: boolean;
@@ -39,6 +40,7 @@ export function QuickActionOverlay({
   onAddTask,
   onClose,
 }: QuickActionOverlayProps) {
+  const mobileLayout = useMobileLayout();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [activeSection, setActiveSection] =
     useState<QuickActionSection>("task");
@@ -57,6 +59,7 @@ export function QuickActionOverlay({
   }, []);
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.nativeEvent.isComposing) return;
     if (event.key === "Escape") {
       event.preventDefault();
       onClose();
@@ -92,7 +95,7 @@ export function QuickActionOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4"
+      className={`${mobileLayout ? "mobile-dialog-overlay " : ""}fixed inset-0 z-50 flex items-end bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4`}
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
