@@ -75,7 +75,7 @@
 
 기존 계정 바인딩 규칙은 유지된다. 앱이 다른 계정으로의 전환을 허용하도록 변경한 것이 아니다. 재무 hook의 계정·서버 변경 테스트는 요청 결과 격리를 독립적으로 검증한다.
 
-Windows 실행 파일은 `src-tauri/target/release/Yeonsik_Note.exe`, Android APK는 `src-tauri/gen/android/app/build/outputs/apk/arm64/debug/app-arm64-debug.apk`에 생성한다. Android의 Windows symlink 제약은 기존 빌드 스크립트의 fallback으로 처리하며, Rust 빌드 성공과 APK 안의 native library SHA-256 일치를 검사한다. 설치된 PC·모바일 앱과 기존 데이터·설정은 이번 작업에서 변경하지 않았다.
+Windows 실행 파일은 `src-tauri/target/release/Yeonsik_Note.exe`, Android APK는 `src-tauri/gen/android/app/build/outputs/apk/arm64/debug/app-arm64-debug.apk`에 생성한다. Android의 Windows symlink 제약은 기존 빌드 스크립트의 fallback으로 처리하며, Rust 빌드 성공과 APK 안의 native library SHA-256 일치를 검사한다. 이 기능 구현 단계에서는 설치본을 변경하지 않았다. 이후 사용자 요청으로 진행한 설치·보존·실제 계정 검증은 [별도 설치본 검증 기록](command-center-installed-apps-2026-11-06.md)에서 구분한다.
 
 최종 산출물 SHA-256:
 
