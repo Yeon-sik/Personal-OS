@@ -119,7 +119,10 @@ describe("HomePanel entry points", () => {
     });
 
     expect(renderer.root.findAllByType("div").filter((entry) => entry.props.className?.includes("text-sm font-semibold tabular-nums text-white")).map((entry) => entry.children.join(""))).toEqual(["1개", "1개", "기록 없음", "0개"]);
-    expect(renderer.root.findAllByType("li").map((entry) => entry.findAllByType("span").map((span) => span.children.join("")).join(""))).toEqual(["오늘 계획한 일"]);
+    const agenda = renderer.root.findByProps({ "aria-labelledby": "home-agenda-heading" });
+    expect(agenda.findAllByType("li").map(entry => entry.findAllByType("span")[0].children.join("")))
+      .toEqual(["오늘 계획한 일", "내일 계획한 일", "미래 마감일인 일"]);
+    expect(JSON.stringify(renderer.toJSON())).toContain("미확정 후보");
     act(() => renderer.unmount());
   });
 });

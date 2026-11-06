@@ -2,12 +2,16 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HomePanelProps } from "../features/home/HomePanel";
 import { App } from "./App";
+import type { Task } from "../types";
+import type { ActionActions } from "../features/actions/useActionActions";
+import { task } from "../features/home/testFixtures";
 
 const harness = vi.hoisted(() => ({
   openWorkspace: vi.fn().mockResolvedValue(undefined),
   quickOpen: vi.fn(),
   runtime: {
-    notes: [], tasks: [], workoutRecords: [], fitnessSummaryProjections: [],
+    notes: [], tasks: [] as Task[], workoutRecords: [], fitnessSummaryProjections: [],
+    actionActions: {} as ActionActions,
     mealRecords: [], weightRecords: [], activeDevices: [], projects: [],
     projectMilestones: [], projectActions: [], projectIdeas: [], projectHistory: [],
     workstreams: [], workstreamProjects: [], workstreamMilestones: [],
@@ -37,14 +41,17 @@ vi.mock("../features/quick-capture/useQuickCapture", () => ({ useQuickCapture: (
   refreshShortcutStatus: vi.fn(), setShortcutPreference: vi.fn(),
 }) }));
 vi.mock("../features/quick-capture/QuickCapturePanel", () => ({ QuickCapturePanel: () => null }));
-vi.mock("../features/home/HomePanel", () => ({ HomePanel: ({ onOpenRecords, onOpenProjects, onQuickCapture }: HomePanelProps) => (
+vi.mock("../features/home/HomePanel", () => ({ HomePanel: ({ onOpenRecords, onOpenProjects, onQuickCapture, onOpenAction, connectedApps }: HomePanelProps) => (
   <section data-panel="home">
     <button onClick={() => onOpenRecords("all", "2026-09-18")}>활동 날짜 열기</button>
     <button onClick={() => onOpenRecords("tasks")}>오늘 할 일 열기</button>
     <button onClick={onOpenProjects}>프로젝트 바로가기</button>
     <button onClick={onQuickCapture}>홈 빠른 입력</button>
+    <button onClick={() => onOpenAction?.("agenda-task")}>홈 일정 열기</button>
+    <button onClick={connectedApps?.onOpenSettings}>홈 연결 설정</button>
   </section>
 ) }));
+vi.mock("../features/actions/ActionDetailDialog", () => ({ ActionDetailDialog: ({ task, onClose }: { task: Task; onClose: () => void }) => <section data-panel="action-detail" data-task={task.id}><button onClick={onClose}>상세 닫기</button></section> }));
 vi.mock("../features/records/RecordsPanel", () => ({ RecordsPanel: ({ selectedDate }: { selectedDate: string }) => <section data-panel="records" data-date={selectedDate} /> }));
 vi.mock("../features/notes/MemoPanel", () => ({ MemoPanel: () => <section data-panel="memo" /> }));
 vi.mock("../features/tasks/ChecklistPanel", () => ({ ChecklistPanel: () => <section data-panel="tasks" /> }));
@@ -72,12 +79,23 @@ function clickButton(label: string, navLabel?: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  harness.runtime.tasks = [];
   act(() => { renderer = create(<App />); });
 });
 
 afterEach(() => { act(() => renderer.unmount()); });
 
 describe("Personal OS four-tab navigation", () => {
+  it("opens the actual task detail from home and routes app connection settings", () => {
+    harness.runtime.tasks = [task({ id: "agenda-task" })];
+    act(() => renderer.update(<App />));
+    clickButton("홈 일정 열기");
+    expect(renderer.root.findByProps({ "data-panel": "action-detail" }).props["data-task"]).toBe("agenda-task");
+    clickButton("상세 닫기");
+    expect(renderer.root.findAllByProps({ "data-panel": "action-detail" })).toHaveLength(0);
+    clickButton("홈 연결 설정");
+    expect(renderer.root.findByProps({ "data-panel": "settings" })).toBeDefined();
+  });
   it("starts at home and keeps exactly four primary destinations visible", () => {
     expect(renderer.root.findByProps({ "data-panel": "home" })).toBeDefined();
     const nav = renderer.root.findByProps({ "aria-label": "주요 화면" });

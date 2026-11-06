@@ -1,13 +1,17 @@
-import { ArrowUpRight, CheckCheck, ClipboardList, FolderKanban, NotebookPen, Plus } from "lucide-react";
+import { ArrowUpRight, ClipboardList, FolderKanban, NotebookPen, Plus } from "lucide-react";
 import { useMemo } from "react";
 import type { LocalDataSnapshot } from "../../types";
 import type { SyncStatus } from "../../lib/sync/syncTypes";
 import { getSyncStatusLabel } from "../../components/syncStatusPresentation";
-import { formatKoreanDate, formatLocalDate } from "../fitness/fitnessDate";
+import { formatKoreanDate } from "../fitness/fitnessDate";
 import { getFitnessSummary } from "../fitness-summary/fitnessSummary";
 import { getRecordsForDate } from "../records/recordAggregation";
 import { BriefMetric } from "../records/components/InteractiveRecordsMetrics";
 import { ActivityHeatmap } from "./ActivityHeatmap";
+import { AgendaPanel } from "./AgendaPanel";
+import { ConnectedAppsPanel, type ConnectedAppsPanelProps } from "./ConnectedAppsPanel";
+import { useCurrentTime } from "./useCurrentTime";
+import { calendarDate } from "../actions/actionTime";
 
 export interface HomePanelProps {
   snapshot: LocalDataSnapshot;
@@ -15,10 +19,16 @@ export interface HomePanelProps {
   onOpenRecords: (section?: "all" | "memo" | "tasks" | "fitness", date?: string) => void;
   onOpenProjects: () => void;
   onQuickCapture: () => void;
+  onOpenAction?: (id: string) => void;
+  connectedApps?: Omit<ConnectedAppsPanelProps, "snapshot" | "syncStatus" | "today" | "onOpenRecords">;
   today?: string;
+  now?: number;
 }
 
-export function HomePanel({ snapshot, syncStatus, onOpenRecords, onOpenProjects, onQuickCapture, today = formatLocalDate() }: HomePanelProps) {
+export function HomePanel({ snapshot, syncStatus, onOpenRecords, onOpenProjects, onQuickCapture, onOpenAction, connectedApps, today: dateOverride, now: nowOverride }: HomePanelProps) {
+  const clock = useCurrentTime();
+  const now = nowOverride ?? (dateOverride ? Date.parse(dateOverride + "T12:00:00+09:00") : clock);
+  const today = dateOverride ?? calendarDate(now);
   const todayRecords = useMemo(() => getRecordsForDate(snapshot, today), [snapshot, today]);
   const fitness = useMemo(() => getFitnessSummary(snapshot, today), [snapshot, today]);
   const todayPlannedTasks = todayRecords.tasks.filter((task) => task.plannedDate === today && task.registrationState !== "CANDIDATE");
@@ -44,7 +54,6 @@ export function HomePanel({ snapshot, syncStatus, onOpenRecords, onOpenProjects,
         <section aria-labelledby="home-today-heading" className="rounded-md border border-slate-300 bg-slate-950 p-4 text-white dark:border-neutral-800 dark:bg-neutral-950">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-medium text-cyan-300">오늘의 지휘판</p>
               <h1 id="home-today-heading" className="mt-1 break-keep text-xl font-semibold tracking-normal">지금 확인하고, 바로 시작하세요.</h1>
               <p className="mt-2 text-xs text-neutral-400">{formatKoreanDate(today)}</p>
             </div>
@@ -71,20 +80,12 @@ export function HomePanel({ snapshot, syncStatus, onOpenRecords, onOpenProjects,
           ))}
         </section>
 
-        <ActivityHeatmap snapshot={snapshot} today={today} onOpenDate={(date) => onOpenRecords("all", date)} onOpenProjects={onOpenProjects} />
-
-        <div className="grid gap-3 lg:grid-cols-2">
-          <section aria-labelledby="home-next-heading" className="rounded-md border border-slate-300 bg-white p-4 dark:border-neutral-800 dark:bg-black">
-            <div className="flex items-center justify-between gap-2">
-              <h2 id="home-next-heading" className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-neutral-100"><CheckCheck className="h-4 w-4 text-cyan-700 dark:text-cyan-300" aria-hidden="true" />다음 할 일</h2>
-              <button type="button" onClick={() => onOpenRecords("tasks")} className="min-h-8 text-xs text-slate-500 transition-colors duration-150 hover:text-cyan-700 dark:text-neutral-400 dark:hover:text-cyan-300">모두 보기</button>
-            </div>
-            {remainingTasks.length > 0 ? (
-              <ul className="mt-2 divide-y divide-slate-200 dark:divide-neutral-800">
-                {remainingTasks.slice(0, 3).map((task) => <li key={task.id} className="flex items-start gap-2 py-2 text-sm text-slate-700 dark:text-neutral-300"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-600 dark:bg-cyan-400" aria-hidden="true" /><span className="min-w-0 break-words">{task.text}</span></li>)}
-              </ul>
-            ) : <p className="mt-3 text-xs text-slate-500 dark:text-neutral-400">오늘 예정된 할 일이 없습니다. 빠른 입력에서 다음 할 일을 추가하세요.</p>}
-          </section>
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <AgendaPanel tasks={snapshot.tasks} now={now}
+            onOpenCalendar={() => onOpenRecords("all", today)}
+            onOpenTask={(task, date) => onOpenAction ? onOpenAction(task.id) : onOpenRecords("all", date ?? today)} />
+          {connectedApps && <ConnectedAppsPanel key={connectedApps.scopeKey} {...connectedApps} snapshot={snapshot} syncStatus={syncStatus} today={today} onOpenRecords={onOpenRecords} />}
+        </div>
 
           <section aria-labelledby="home-state-heading" className="rounded-md border border-slate-300 bg-white p-4 dark:border-neutral-800 dark:bg-black">
             <h2 id="home-state-heading" className="text-sm font-semibold text-slate-900 dark:text-neutral-100">확인할 상태</h2>
@@ -103,7 +104,7 @@ export function HomePanel({ snapshot, syncStatus, onOpenRecords, onOpenProjects,
               <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-neutral-500" aria-hidden="true" />
             </button>
           </section>
-        </div>
+        <ActivityHeatmap snapshot={snapshot} today={today} onOpenDate={(date) => onOpenRecords("all", date)} onOpenProjects={onOpenProjects} />
       </div>
     </section>
   );

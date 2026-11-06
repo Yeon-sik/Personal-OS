@@ -24,6 +24,7 @@ import { useLocalSyncMemo } from "./useLocalSyncMemo";
 import { useThemeMode } from "./useThemeMode";
 import { APP_TAB_LABELS, type AppTab, type RecordSection } from "./navigation";
 import { useDeadlineNotifications } from "../features/deadline-notifications/useDeadlineNotifications";
+import { ActionDetailDialog } from "../features/actions/ActionDetailDialog";
 
 export function App() {
   const memo = useLocalSyncMemo();
@@ -32,6 +33,8 @@ export function App() {
   const [activeView, setActiveView] = useState<AppTab>("home");
   const [recordSection, setRecordSection] = useState<RecordSection>("all");
   const [selectedDate, setSelectedDate] = useState(formatLocalDate());
+  const [homeAction, setHomeAction] = useState<{ id: string; scope: string } | null>(null);
+  const connectionScope = JSON.stringify([memo.supabaseConfig?.supabaseUrl ?? "local", memo.userId ?? "local", Boolean(memo.isAuthenticated)]);
   const projectWorkspaceState = useMemo(
     () =>
       projectWorkspaceStateFromRuntime({
@@ -138,10 +141,11 @@ export function App() {
     if (date) setSelectedDate(date);
     setActiveView("records");
   }
+  const homeTask = homeAction?.scope === connectionScope ? snapshot.tasks.find(task => task.id === homeAction.id && !task.deletedAt) : undefined;
 
   return (
     <div className="app-shell personal-os-shell flex w-full min-w-0 justify-center bg-slate-200 text-slate-900 dark:bg-black dark:text-neutral-100">
-      <div className="relative flex h-full min-h-0 w-full max-w-[520px] min-w-0 flex-col border-x border-slate-300 bg-slate-100 shadow-panel dark:border-neutral-800 dark:bg-black dark:shadow-none">
+      <div className={`relative flex h-full min-h-0 w-full ${activeView === "home" ? "max-w-6xl" : "max-w-[520px]"} min-w-0 flex-col border-x border-slate-300 bg-slate-100 shadow-panel dark:border-neutral-800 dark:bg-black dark:shadow-none`}>
         <HeaderBar
           activeView={activeView}
           device={memo.device}
@@ -160,6 +164,15 @@ export function App() {
                 onOpenRecords={openRecords}
                 onOpenProjects={() => setActiveView("projects")}
                 onQuickCapture={quickCapture.open}
+                onOpenAction={id => setHomeAction({ id, scope: connectionScope })}
+                connectedApps={{
+                  enabled: memo.isSupabaseConfigured && memo.isAuthenticated,
+                  scopeKey: connectionScope,
+                  loadFinanceDailySummaries: memo.loadFinanceDailySummaries,
+                  onOpenSettings: () => setActiveView("settings"),
+                  onSync: memo.manualSync,
+                  isSyncing: memo.isManualSyncing,
+                }}
               />
             ) : activeView === "settings" ? (
               <SettingsPanel
@@ -311,6 +324,9 @@ export function App() {
           onModeChange={quickCapture.setMode}
           onSave={quickCapture.saveDraft}
         />
+        {homeTask && memo.actionActions && <ActionDetailDialog key={homeTask.id} task={homeTask}
+          pending={snapshot.syncState?.pending.find(item => item.collection === "tasks" && item.id === homeTask.id)}
+          actions={memo.actionActions} onClose={() => setHomeAction(null)} onDelete={memo.deleteTask} onSync={memo.manualSync} />}
       </div>
     </div>
   );
