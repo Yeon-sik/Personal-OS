@@ -95,9 +95,12 @@ export function RecordsPanel({
     error: financeError,
     financeByDate,
     isLoading: isFinanceLoading,
+    lastFetchedAt: financeLastFetchedAt,
     refresh: refreshFinance,
   } = useFinanceCalendar({
     enabled: financeEnabled,
+    online: syncStatus.isOnline,
+    scopeKey: JSON.stringify(snapshot.syncState?.scope ?? null),
     visibleMonth,
     loadSummaries: loadFinanceDailySummaries,
   });
@@ -163,6 +166,8 @@ export function RecordsPanel({
         financeEnabled={financeEnabled}
         financeError={financeError}
         isFinanceLoading={isFinanceLoading}
+        isOnline={syncStatus.isOnline}
+        lastFetchedAt={financeLastFetchedAt}
         onRefresh={refreshFinance}
         selectedDate={selectedDate}
         selectedFinance={selectedFinance}

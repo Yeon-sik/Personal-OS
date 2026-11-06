@@ -7,6 +7,8 @@ interface FinanceDailyCardProps {
   financeEnabled: boolean;
   financeError: string | null;
   isFinanceLoading: boolean;
+  isOnline?: boolean;
+  lastFetchedAt?: string | null;
   onRefresh: () => Promise<void>;
   selectedDate: string;
   selectedFinance: FinanceDailySummary | undefined;
@@ -16,6 +18,8 @@ export function FinanceDailyCard({
   financeEnabled,
   financeError,
   isFinanceLoading,
+  isOnline = true,
+  lastFetchedAt,
   onRefresh,
   selectedDate,
   selectedFinance,
@@ -34,7 +38,7 @@ export function FinanceDailyCard({
         <button
           type="button"
           onClick={() => void onRefresh()}
-          disabled={!financeEnabled || isFinanceLoading}
+          disabled={!financeEnabled || !isOnline || isFinanceLoading}
           className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-300 px-2.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-200"
         >
           <RefreshCw
@@ -53,6 +57,10 @@ export function FinanceDailyCard({
         <p className="mt-3 rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/30 dark:text-rose-200">
           {financeError}
         </p>
+      ) : isFinanceLoading && !lastFetchedAt ? (
+        <p role="status" className="mt-3 text-sm text-slate-600 dark:text-neutral-300">CashOS 요약을 읽고 있습니다.</p>
+      ) : !isOnline && !lastFetchedAt ? (
+        <p role="status" className="mt-3 text-sm text-slate-600 dark:text-neutral-300">오프라인입니다. 연결 후 재무 요약을 조회합니다.</p>
       ) : selectedFinance ? (
         <div className="mt-3 grid grid-cols-3 gap-2">
           <div className="rounded-md bg-emerald-50 p-2 dark:bg-emerald-950/30">
@@ -81,6 +89,7 @@ export function FinanceDailyCard({
           선택한 날짜에 확정된 수입·지출 기록이 없습니다.
         </p>
       )}
+      {financeEnabled && lastFetchedAt && <p className="mt-3 text-xs text-slate-600 dark:text-neutral-400">{!isOnline ? "오프라인 · 저장된 조회 결과 · " : ""}마지막 조회 {new Date(lastFetchedAt).toLocaleString("ko-KR")}</p>}
     </div>
   );
 }

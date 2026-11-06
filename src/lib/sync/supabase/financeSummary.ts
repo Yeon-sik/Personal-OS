@@ -53,12 +53,24 @@ export function createSupabaseFinanceSummaryTransport(
 export function financeDailySummaryFromRow(
   row: FinanceDailySummarySelectedRow,
 ): FinanceDailySummary {
+  function integer(value: unknown): number {
+    if ((typeof value !== "number" && (typeof value !== "string" || !/^-?\d+$/.test(value))) || !Number.isSafeInteger(Number(value))) {
+      throw new Error("CashOS 요약의 금액 또는 건수를 읽을 수 없습니다. 원본 데이터와 연결 상태를 확인해 주세요.");
+    }
+    return Number(value);
+  }
+  const date = row.date;
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date + "T00:00:00Z")) || new Date(date + "T00:00:00Z").toISOString().slice(0, 10) !== date) {
+    throw new Error("CashOS 요약의 날짜가 올바르지 않습니다.");
+  }
+  const entryCount = integer(row.entry_count);
+  if (entryCount < 0) throw new Error("CashOS 요약의 건수가 올바르지 않습니다.");
   return {
-    date: row.date,
-    incomeKrw: Number(row.income_krw),
-    expenseKrw: Number(row.expense_krw),
-    netKrw: Number(row.net_krw),
-    entryCount: Number(row.entry_count),
+    date,
+    incomeKrw: integer(row.income_krw),
+    expenseKrw: integer(row.expense_krw),
+    netKrw: integer(row.net_krw),
+    entryCount,
   };
 }
 
