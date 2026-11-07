@@ -85,9 +85,9 @@ const emptyTaskMarker: CalendarTaskMarker = {
   allPlannedDone: false,
 };
 
-const calendarCellSize = "h-[clamp(8.25rem,24vw,9rem)] min-w-0";
+const calendarCellSize = "h-24 min-w-0";
 const calendarCellBase =
-  `${calendarCellSize} flex flex-col justify-between gap-1 ` +
+  `${calendarCellSize} flex flex-col justify-between gap-0.5 ` +
   "rounded-md border-2 px-1 py-1 text-xs";
 
 function renderTaskMarker(taskMarker: CalendarTaskMarker) {
@@ -116,7 +116,7 @@ function renderTaskMarker(taskMarker: CalendarTaskMarker) {
         className="flex h-full w-full min-w-0 items-center justify-center gap-1 rounded-sm border-2 border-slate-200 bg-transparent px-1 dark:border-neutral-700"
       >
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
-        <span className="text-[10px] font-semibold leading-none text-sky-500 dark:text-sky-300">
+        <span className="text-[8px] font-semibold leading-none text-sky-500 dark:text-sky-300">
           x{taskMarker.activeCount}
         </span>
       </span>
@@ -247,7 +247,7 @@ export function RecordCalendar({
               >
                 {Number(date.slice(-2))}
               </span>
-              <span className="min-h-6 w-full space-y-0.5 overflow-hidden text-[9px] font-semibold leading-[1.05]">
+              <span className="h-5 w-full shrink-0 space-y-0.5 overflow-hidden text-[9px] font-semibold leading-none">
                 <span className="block truncate text-emerald-700 dark:text-emerald-300">
                   {finance?.incomeKrw
                     ? `+${formatCompactKrw(finance.incomeKrw)}`
@@ -259,7 +259,7 @@ export function RecordCalendar({
                     : "\u00a0"}
                 </span>
               </span>
-              <span className="grid min-h-0 flex-1 w-full grid-rows-6 gap-0.5 overflow-hidden">
+              <span className="grid w-full shrink-0 grid-rows-[repeat(3,4px)_12px_repeat(2,4px)] gap-px overflow-hidden">
                 <span
                   title={markers?.weights ? "체중" : undefined}
                   className={
