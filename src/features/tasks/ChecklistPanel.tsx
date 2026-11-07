@@ -288,7 +288,7 @@ export function ChecklistPanel({
   }
 
   return (
-    <section className="flex min-h-0 flex-col overflow-hidden rounded-md border border-slate-300 bg-white dark:border-neutral-800 dark:bg-black">
+    <section className="!pb-0 flex min-h-0 flex-col overflow-hidden rounded-md border border-slate-300 bg-white dark:border-neutral-800 dark:bg-black">
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-200 px-3 dark:border-neutral-800">
         <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-900 dark:text-neutral-100">
           <CheckSquare
@@ -332,26 +332,26 @@ export function ChecklistPanel({
         onDraftModeChange={setDraftMode}
       />
 
-      <div className="space-y-2 border-b border-slate-200 p-3 dark:border-neutral-800">
-        <label className="block text-sm font-medium">할 일 검색
+      <div className="space-y-2 border-b border-slate-200 p-2 dark:border-neutral-800">
+        <label className="block"><span className="sr-only">할 일 검색</span>
           <input type="search" value={query} onChange={event => changeFilter(() => setQuery(event.target.value))} placeholder="제목으로 찾기" aria-label="할 일 검색"
-            className="mt-1 min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100" />
+            className="min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-base text-slate-950 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100" />
         </label>
         <div className="grid grid-cols-2 gap-2">
-          <label className="text-sm font-medium">상태
-            <select value={status} onChange={event => changeFilter(() => setStatus(event.target.value as TaskListStatus))} aria-label="할 일 상태 필터" className="mt-1 min-h-11 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-neutral-700 dark:bg-neutral-950">
+          <label><span className="sr-only">상태</span>
+            <select value={status} onChange={event => changeFilter(() => setStatus(event.target.value as TaskListStatus))} aria-label="할 일 상태 필터" className="min-h-11 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-neutral-700 dark:bg-neutral-950">
               <option value="open">미완료</option><option value="all">전체</option><option value="completed">완료 기록</option><option value="undated">날짜 미정</option><option value="skipped">건너뛴 회차</option>
             </select>
           </label>
-          <label className="text-sm font-medium">분류
-            <select value={category} onChange={event => changeFilter(() => setCategory(event.target.value))} aria-label="할 일 분류 필터" className="mt-1 min-h-11 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-neutral-700 dark:bg-neutral-950">
+          <label><span className="sr-only">분류</span>
+            <select value={category} onChange={event => changeFilter(() => setCategory(event.target.value))} aria-label="할 일 분류 필터" className="min-h-11 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-neutral-700 dark:bg-neutral-950">
               <option value="all">모든 분류</option><option value="uncategorized">분류 없음</option>
               {[...TASK_CATEGORIES, ...extraCategories].map(value => <option key={value} value={value}>{value}</option>)}
             </select>
           </label>
         </div>
       </div>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto scroll-pb-16 p-2 pb-16">
         {editingLayout && <p className="text-sm text-slate-600 dark:text-neutral-300">편집 중인 항목은 저장하거나 취소할 때까지 현재 목록에 유지됩니다.</p>}
         {status === "completed" ? <section aria-label="날짜별 완료 기록" className="space-y-5">
           <p className="text-sm text-slate-600 dark:text-neutral-300">실제로 완료한 날짜 · 서울 기준. 계획일이나 마지막 수정일로 추정하지 않습니다.</p>
@@ -361,13 +361,13 @@ export function ChecklistPanel({
             {renderList(group.tasks, "완료한 일이 없습니다.")}
           </section>) : <p className="py-5 text-sm text-slate-600 dark:text-neutral-300">조건에 맞는 완료 기록이 없습니다.</p>}
         </section> : <>
-          <section className="space-y-2">
+          {(todayTasks.length > 0 || deadlineTasks.length === 0) && <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-fuchsia-800 dark:text-fuchsia-200">오늘 할 일</h3>
               <button type="button" onClick={() => openDraft("today")} className="inline-flex min-h-11 items-center justify-center rounded-md border border-fuchsia-300 px-3 text-sm font-semibold text-fuchsia-800 hover:bg-fuchsia-50 dark:border-fuchsia-800 dark:text-fuchsia-200 dark:hover:bg-fuchsia-950/50">추가</button>
             </div>
             {renderList(todayTasks, "조건에 맞는 오늘 할 일이 없습니다.")}
-          </section>
+          </section>}
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-sky-800 dark:text-sky-200">그 밖의 할 일</h3>
