@@ -90,55 +90,47 @@ const calendarCellBase =
   `${calendarCellSize} flex flex-col justify-between gap-0.5 ` +
   "rounded-md border-2 px-1 py-1 text-xs";
 
-function renderTaskMarker(taskMarker: CalendarTaskMarker) {
-  const confirmed = taskMarker.confirmedCount ?? 0;
+function getScheduleCount(taskMarker: CalendarTaskMarker) {
+  const confirmed = taskMarker.confirmedCount ?? Math.max(taskMarker.activeCount, taskMarker.dueCount);
   const candidates = taskMarker.candidateCount ?? 0;
-  if (confirmed || candidates) {
-    return <span className="flex h-full min-w-0 items-center justify-center gap-1 overflow-hidden rounded-sm border border-teal-600 text-[8px] font-semibold text-teal-800 dark:text-teal-300"
-      title={`확정 일정 ${confirmed}개 · 마감 ${taskMarker.dueCount}개 · 후보 ${candidates}개`}>
-      {confirmed > 0 && <span className="truncate">일정 {confirmed}</span>}
-      {candidates > 0 && <span className="truncate border-l border-dashed border-amber-600 pl-0.5 text-amber-900 dark:text-amber-200">후보 {candidates}</span>}
+  return {
+    confirmed,
+    candidates,
+    total: confirmed + candidates,
+    label: `확정 일정 ${confirmed}개 · 후보 ${candidates}개 · 마감 ${taskMarker.dueCount}개`,
+  };
+}
+
+function renderTaskMarker(taskMarker: CalendarTaskMarker) {
+  const { confirmed, candidates, label } = getScheduleCount(taskMarker);
+  if (confirmed && candidates) {
+    return <span title={label} className="flex h-full w-full overflow-hidden rounded-sm border border-teal-600">
+      <span className="h-full flex-1 bg-teal-500" />
+      <span className="h-full flex-1 border-l border-dashed border-amber-700 bg-amber-400" />
     </span>;
   }
-  if (taskMarker.dueCount > 0) {
-    return (
-      <span
-        title={`할 일 ${taskMarker.dueCount}개 마감`}
-        className="block h-full w-full rounded-sm border-2 border-transparent bg-sky-400"
-      />
-    );
+  if (candidates) {
+    return <span title={label} className="block h-full w-full rounded-sm border border-dashed border-amber-600 bg-amber-200 dark:bg-amber-800" />;
   }
-
-  if (taskMarker.activeCount > 0) {
-    return (
-      <span
-        title={`진행 중인 할 일 ${taskMarker.activeCount}개`}
-        className="flex h-full w-full min-w-0 items-center justify-center gap-1 rounded-sm border-2 border-slate-200 bg-transparent px-1 dark:border-neutral-700"
-      >
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
-        <span className="text-[8px] font-semibold leading-none text-sky-500 dark:text-sky-300">
-          x{taskMarker.activeCount}
-        </span>
-      </span>
-    );
+  if (confirmed) {
+    return <span title={label} className={taskMarker.dueCount
+      ? "block h-full w-full rounded-sm border border-transparent bg-sky-400"
+      : "block h-full w-full rounded-sm border border-teal-600 bg-teal-500"} />;
   }
-
-  return (
-    <span className="block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700" />
-  );
+  return <span className="block h-full w-full rounded-sm border border-slate-200 bg-transparent dark:border-neutral-700" />;
 }
 
 function renderPlannedDoneMarker(taskMarker: CalendarTaskMarker) {
   if (!taskMarker.allPlannedDone) {
     return (
-      <span className="block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700" />
+      <span className="block h-full w-full rounded-sm border border-slate-200 bg-transparent dark:border-neutral-700" />
     );
   }
 
   return (
     <span
       title={`오늘 할 일 ${taskMarker.completedPlannedCount}/${taskMarker.plannedCount} 완료`}
-      className="block h-full w-full rounded-sm border-2 border-transparent bg-[#FF00FF]"
+      className="block h-full w-full rounded-sm border border-transparent bg-[#FF00FF]"
     />
   );
 }
@@ -223,12 +215,13 @@ export function RecordCalendar({
           const isSelected = date === selectedDate;
           const isToday = date === today;
           const taskMarker = markers?.tasks ?? emptyTaskMarker;
+          const schedule = getScheduleCount(taskMarker);
 
           return date ? (
             <button
               key={date}
               type="button"
-              aria-label={`${date} · 일정 ${taskMarker.confirmedCount ?? 0}개 · 후보 ${taskMarker.candidateCount ?? 0}개`}
+              aria-label={`${date} · 일정 ${schedule.confirmed}개 · 후보 ${schedule.candidates}개`}
               onClick={() => {
                 onSelectDate(date);
               }}
@@ -238,14 +231,20 @@ export function RecordCalendar({
                   : `${calendarCellBase} border-slate-200 bg-white text-slate-800 transition hover:border-teal-300 hover:bg-teal-50 dark:border-neutral-800 dark:bg-black dark:text-neutral-200 dark:hover:border-teal-800 dark:hover:bg-teal-950/30`
               }
             >
-              <span
-                className={
-                  isToday
-                    ? "inline-flex h-5 min-w-5 items-center justify-center self-center rounded-full bg-slate-900 px-1 text-[11px] font-semibold text-white dark:bg-neutral-100 dark:text-black"
-                    : "inline-flex h-5 min-w-5 items-center justify-center self-center px-1 text-[11px] font-semibold"
-                }
-              >
-                {Number(date.slice(-2))}
+              <span className="flex min-h-5 w-full flex-wrap items-center justify-between gap-x-0.5 gap-y-0.5">
+                <span className={isToday
+                  ? "inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-slate-900 px-0.5 text-[11px] font-semibold text-white dark:bg-neutral-100 dark:text-black"
+                  : "inline-flex h-4 min-w-4 shrink-0 items-center justify-center px-0.5 text-[11px] font-semibold"}>
+                  {Number(date.slice(-2))}
+                </span>
+                {schedule.total > 0 && <span
+                  aria-hidden="true"
+                  title={`일정 합계 ${schedule.total}개 · ${schedule.label}`}
+                  className={schedule.confirmed
+                    ? "inline-flex h-3 min-w-3 shrink-0 items-center justify-center rounded bg-teal-700 px-0.5 text-[9px] font-semibold leading-none text-white dark:bg-teal-300 dark:text-teal-950"
+                    : "inline-flex h-3 min-w-3 shrink-0 items-center justify-center rounded border border-dashed border-amber-700 bg-amber-100 px-0.5 text-[9px] font-semibold leading-none text-amber-950 dark:border-amber-400 dark:bg-amber-900 dark:text-amber-100"}>
+                  {schedule.total > 99 ? "99+" : schedule.total}
+                </span>}
               </span>
               <span className="h-5 w-full shrink-0 space-y-0.5 overflow-hidden text-[9px] font-semibold leading-none">
                 <span className="block truncate text-emerald-700 dark:text-emerald-300">
@@ -259,13 +258,13 @@ export function RecordCalendar({
                     : "\u00a0"}
                 </span>
               </span>
-              <span className="grid w-full shrink-0 grid-rows-[repeat(3,4px)_12px_repeat(2,4px)] gap-px overflow-hidden">
+              <span className="grid w-full shrink-0 grid-rows-[repeat(6,4px)] gap-px overflow-hidden">
                 <span
                   title={markers?.weights ? "체중" : undefined}
                   className={
                     markers?.weights
-                      ? `block h-full w-full rounded-sm border-2 ${markerStyles[3].className}`
-                      : "block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700"
+                      ? `block h-full w-full rounded-sm border ${markerStyles[3].className}`
+                      : "block h-full w-full rounded-sm border border-slate-200 bg-transparent dark:border-neutral-700"
                   }
                   aria-hidden={!markers?.weights}
                 />
@@ -273,8 +272,8 @@ export function RecordCalendar({
                   title={markers?.meals ? "식단" : undefined}
                   className={
                     markers?.meals
-                      ? `block h-full w-full rounded-sm border-2 ${markerStyles[2].className}`
-                      : "block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700"
+                      ? `block h-full w-full rounded-sm border ${markerStyles[2].className}`
+                      : "block h-full w-full rounded-sm border border-slate-200 bg-transparent dark:border-neutral-700"
                   }
                   aria-hidden={!markers?.meals}
                 />
@@ -282,8 +281,8 @@ export function RecordCalendar({
                   title={markers?.workouts ? "운동" : undefined}
                   className={
                     markers?.workouts
-                      ? `block h-full w-full rounded-sm border-2 ${markerStyles[1].className}`
-                      : "block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700"
+                      ? `block h-full w-full rounded-sm border ${markerStyles[1].className}`
+                      : "block h-full w-full rounded-sm border border-slate-200 bg-transparent dark:border-neutral-700"
                   }
                   aria-hidden={!markers?.workouts}
                 />
@@ -293,8 +292,8 @@ export function RecordCalendar({
                   title={markers?.notes ? "메모" : undefined}
                   className={
                     markers?.notes
-                      ? `block h-full w-full rounded-sm border-2 ${markerStyles[0].className}`
-                      : "block h-full w-full rounded-sm border-2 border-slate-200 bg-transparent dark:border-neutral-700"
+                      ? `block h-full w-full rounded-sm border ${markerStyles[0].className}`
+                      : "block h-full w-full rounded-sm border border-slate-200 bg-transparent dark:border-neutral-700"
                   }
                   aria-hidden={!markers?.notes}
                 />
