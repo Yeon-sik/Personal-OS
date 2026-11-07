@@ -64,7 +64,7 @@ export function reconcileDeadlineNotifications(
   const instant = Temporal.Instant.from(now);
   if (settings.enabled && settings.time) {
     for (const task of tasks) {
-      if (task.registrationState !== "CONFIRMED" || task.deletedAt != null || task.isDone) continue;
+      if (task.registrationState !== "CONFIRMED" || task.deletedAt != null || task.isDone || task.skippedAt) continue;
       try {
         const deadline = effectiveDeadline(task, settings.timeZone);
         if (!deadline || Temporal.Instant.compare(deadline.instant, instant) < 0) continue;

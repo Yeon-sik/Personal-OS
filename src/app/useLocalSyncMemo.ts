@@ -2,6 +2,9 @@ import { useMemo, useState } from "react";
 import { getVisibleNotes } from "../features/notes/noteService";
 import { useNoteActions } from "../features/notes/useNoteActions";
 import { getVisibleTasks } from "../features/tasks/taskService";
+import { actionId } from "../features/actions/actionIdentity";
+import { calendarDate } from "../features/actions/actionTime";
+import { PROJECT_TASK_NAMESPACE, planProjectTask, syncLinkedProjectAction } from "../features/tasks/projectTaskLink";
 import { useTaskActions } from "../features/tasks/useTaskActions";
 import { useActionActions } from "../features/actions/useActionActions";
 import { useDevControlActions } from "../features/dev-control/useDevControlActions";
@@ -95,11 +98,15 @@ export function useLocalSyncMemo(
     setSelectedNoteId: runtime.setSelectedNoteId,
     visibleNotes,
   });
+  const [taskError, setTaskError] = useState<string | null>(null);
   const taskActions = useTaskActions({
+    snapshot: runtime.snapshot,
+    onError: setTaskError,
+    transformTaskSnapshot: syncLinkedProjectAction,
     commitSnapshot: runtime.commitSnapshot,
     device: runtime.device,
   });
-  const actionActions = useActionActions(runtime);
+  const actionActions = useActionActions({ ...runtime, transformTaskSnapshot: syncLinkedProjectAction });
   const devControlActions = useDevControlActions({
     commitSnapshot: runtime.commitSnapshot,
     snapshot: runtime.snapshot,
@@ -109,6 +116,29 @@ export function useLocalSyncMemo(
     selectedWorkstreamId,
     setSelectedWorkstreamId,
   });
+  const planProjectAction = (id: string, date = calendarDate()) => {
+    if (!runtime.device) return;
+    setTaskError(null);
+    const owner = runtime.snapshot.syncState?.scope?.userId ?? (runtime.isAuthenticated ? runtime.userId : `local:${runtime.device.id}`);
+    const deviceId = runtime.device.id;
+    void actionId(owner, PROJECT_TASK_NAMESPACE, id).then(taskId => runtime.commitDurably(current => {
+      const currentOwner = current.syncState?.scope?.userId ?? owner;
+      if (currentOwner !== owner) throw new Error("계정이 변경되었습니다. 다시 시도해 주세요.");
+      return planProjectTask(current, id, taskId, date, deviceId, owner);
+    })).catch(error => setTaskError(error instanceof Error ? error.message : "할 일 연결에 실패했습니다."));
+  };
+  const updateLinkedProjectAction: typeof devControlActions.updateProjectAction = (id, changes) => {
+    const task = runtime.snapshot.tasks.find(row => row.projectActionId === id && !row.deletedAt);
+    if (!task) { devControlActions.updateProjectAction(id, changes); return; }
+    if (changes.type !== undefined) devControlActions.updateProjectAction(id, { type: changes.type });
+    setTaskError(null);
+    if (changes.status !== undefined) {
+      void actionActions.updateAction(task.id, task.updatedAt, {
+        isDone: changes.status === "DONE",
+        ...(changes.title !== undefined ? { text: changes.title } : {}),
+      }).catch(error => setTaskError(error instanceof Error ? error.message : "완료 상태 변경에 실패했습니다."));
+    } else if (changes.title !== undefined) taskActions.updateTaskText(task.id, changes.title);
+  };
   const knowledgeVault = useKnowledgeVaultRuntime({
     snapshot: runtime.snapshot,
     isReady: runtime.isReady,
@@ -137,7 +167,9 @@ export function useLocalSyncMemo(
     projectIdeas: runtime.snapshot.projectIdeas,
     projectMilestones: runtime.snapshot.projectMilestones,
     projects: visibleProjects,
-    error: runtime.error,
+    error: taskError ?? runtime.error,
+    taskPlanningError: taskError,
+    projectTaskLinks: Object.fromEntries(runtime.snapshot.tasks.filter(task => task.projectActionId && !task.deletedAt).map(task => [task.projectActionId!, task.plannedDate])),
     fitnessSummaryProjections: visibleFitnessSummaryProjections,
     fitnessSharedWorkoutRecords: visibleFitnessSharedWorkoutRecords,
     fitnessNutritionSummaries: runtime.snapshot.fitnessNutritionSummaries,
@@ -173,5 +205,7 @@ export function useLocalSyncMemo(
     // Legacy archive only; live workouts come from v2 projections.
     workoutRecords: runtime.snapshot.workoutRecords,
     ...devControlActions,
+    planProjectAction,
+    updateProjectAction: updateLinkedProjectAction,
   };
 }

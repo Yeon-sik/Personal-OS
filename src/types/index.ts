@@ -37,3 +37,5 @@ export type {
   WorkoutRecord,
   WorkoutType,
 } from "./entities";
+
+export type { TaskChecklistItem, TaskDetailsChanges, TaskPlanningFields, TaskRecurrence } from "./taskPlanning";

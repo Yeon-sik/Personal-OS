@@ -38,7 +38,7 @@ describe("HomePanel entry points", () => {
 
   it("shows record-only activity before opening its calendar date and excludes deleted tasks from today's summary", () => {
     const snapshot = emptySnapshot();
-    snapshot.tasks = [task(), task({ id: "done", isDone: true }), task({ id: "deleted", text: "삭제된 일", deletedAt: "2026-10-02T01:00:00.000Z" })];
+    snapshot.tasks = [task(), task({ id: "done", isDone: true, completedAt: "2026-10-02T01:00:00Z" }), task({ id: "deleted", text: "삭제된 일", deletedAt: "2026-10-02T01:00:00.000Z" })];
     snapshot.fitnessSummaryProjections = [projection()];
     snapshot.notes = [{ ...entity, id: "edited-note", createdAt: "2026-10-01T12:00:00.000Z", updatedAt: "2026-10-02T12:00:00.000Z", title: "수정된 메모", content: "" }];
     snapshot.weightRecords = [{ ...entity, id: "weight-1", date: "2026-10-01", weightKg: 70 }];
@@ -105,7 +105,7 @@ describe("HomePanel entry points", () => {
     const snapshot = emptySnapshot();
     snapshot.tasks = [
       task({ id: "today", text: "오늘 계획한 일" }),
-      task({ id: "today-done", text: "오늘 계획한 완료 일", isDone: true }),
+      task({ id: "today-done", text: "오늘 계획한 완료 일", isDone: true, completedAt: "2026-10-02T01:00:00Z" }),
       task({ id: "tomorrow", text: "내일 계획한 일", plannedDate: "2026-10-03", dueDate: "2026-10-03" }),
       task({ id: "unscheduled", text: "계획 없는 새 일", createdAt: "2026-10-02T00:00:00.000Z", plannedDate: null, dueDate: null }),
       task({ id: "future-due", text: "미래 마감일인 일", createdAt: "2026-09-30T00:00:00.000Z", plannedDate: null, dueDate: "2026-10-05" }),

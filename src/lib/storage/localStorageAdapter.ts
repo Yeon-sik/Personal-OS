@@ -28,6 +28,7 @@ import { normalizeProjectGitHubIdentity } from "../dataTrust/projectGitHubIdenti
 import { createEmptySnapshot, type StorageAdapter } from "./storageAdapter";
 import { parseSyncState } from "../sync/syncState";
 import { normalizeActionFields } from "../../features/actions/actionModel";
+import { parseTaskPlanningFields } from "./taskPlanningFields";
 
 const STORAGE_KEY = "localsyncmemo:snapshot:v2";
 const LEGACY_STORAGE_KEY = "localsyncmemo:snapshot:v1";
@@ -416,6 +417,7 @@ function normalizeTask(value: unknown): Task | null {
     : null;
   return {
     ...normalizeActionFields(value),
+    ...parseTaskPlanningFields(value),
     ...(typeof value.actionOwnerScope === "string" ? { actionOwnerScope: value.actionOwnerScope } : {}),
     id: value.id as string,
     text: value.text,

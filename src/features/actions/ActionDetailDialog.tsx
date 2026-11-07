@@ -1,24 +1,45 @@
 import { useState } from "react";
-import type { Task } from "../../types";
+import type { Task, TaskDetailsChanges } from "../../types";
 import type { PendingRevision } from "../../lib/sync/syncState";
 import { ActionDialog, actionButtonClass, actionInputClass } from "./ActionDialog";
+import { TaskDetailsEditor } from "../tasks/components/TaskDetailsEditor";
+import { completionDay } from "../tasks/taskPlanningPresentation";
 import { ActionSummary } from "./ActionSummary";
 import { ACTION_LABELS, normalizeActionFields } from "./actionModel";
 import type { ActionActions } from "./useActionActions";
 import type { ActionEdit } from "./actionImport";
 
-export function ActionDetailDialog({ task, proposal, pending, actions, onClose, onDelete, onSync }: {
+export function ActionDetailDialog({ task, proposal, pending, actions, onClose, onDelete, onSync, onUpdateDetails, onSkipOccurrence, onToggle }: {
   task: Task; proposal?: Task; pending?: PendingRevision; actions: ActionActions;
+  onUpdateDetails?: (id: string, changes: TaskDetailsChanges) => void | Promise<void>;
+  onSkipOccurrence?: (id: string) => void | Promise<void>;
+  onToggle?: (id: string) => void | Promise<void>;
   onClose: () => void; onDelete: (id: string) => void; onSync?: () => Promise<void>;
 }) {
-  const [revision] = useState(task.updatedAt);
+  const [revision, setRevision] = useState(task.updatedAt);
+  const [editorVersion, setEditorVersion] = useState(0);
   const [form, setForm] = useState<ActionEdit>(() => ({
     ...normalizeActionFields(task), text: task.text, plannedDate: task.plannedDate, dueDate: task.dueDate, dueTime: task.dueTime,
   }));
+  const [details, setDetails] = useState<TaskDetailsChanges>(() => ({ description: task.description ?? "", category: task.category ?? null, checklist: task.checklist ?? [], recurrence: task.recurrence ?? null }));
+  const [initialForm, setInitialForm] = useState(form);
+  const [initialDetails, setInitialDetails] = useState(details);
+  const [detailsValid, setDetailsValid] = useState(true);
   const [sourceChecked, setSourceChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const hasUnsavedChanges = JSON.stringify(form) !== JSON.stringify(initialForm) || JSON.stringify(details) !== JSON.stringify(initialDetails) || sourceChecked || !detailsValid;
+  const changedElsewhere = task.updatedAt !== revision;
+  function confirmDiscard() { return !hasUnsavedChanges || Boolean(message) || window.confirm("저장하지 않은 일정 편집을 버리고 닫을까요?"); }
+  function requestClose() { if (confirmDiscard()) onClose(); }
+  function reloadLatest() {
+    const nextForm = { ...normalizeActionFields(task), text: task.text, plannedDate: task.plannedDate, dueDate: task.dueDate, dueTime: task.dueTime };
+    const nextDetails = { description: task.description ?? "", category: task.category ?? null, checklist: task.checklist ?? [], recurrence: task.recurrence ?? null };
+    setForm(nextForm); setInitialForm(nextForm); setDetails(nextDetails); setInitialDetails(nextDetails);
+    setRevision(task.updatedAt); setSourceChecked(false); setDetailsValid(true); setError(null);
+    setEditorVersion(value => value + 1);
+  }
   const isEvent = form.kind === "EXAM" || form.kind === "EVENT";
   const isWindow = form.kind === "APPLICATION" || form.kind === "REGISTRATION";
   function field(key: keyof ActionEdit, label: string, type: "date" | "time" | "text" = "text") {
@@ -34,7 +55,7 @@ export function ActionDetailDialog({ task, proposal, pending, actions, onClose, 
     catch (caught) { setError(caught instanceof Error ? caught.message : "처리하지 못했습니다."); }
     finally { setBusy(false); }
   }
-  return <ActionDialog title={task.deletedAt ? "삭제한 일정" : "일정 상세"} onClose={onClose} busy={busy}>
+  return <ActionDialog title={task.deletedAt ? "삭제한 일정" : "일정 상세"} onClose={requestClose} busy={busy}>
     <div className="space-y-5">
       <h3 className="break-words text-lg font-semibold">{task.text}</h3>
       <ActionSummary task={task} />
@@ -69,8 +90,12 @@ export function ActionDetailDialog({ task, proposal, pending, actions, onClose, 
           setSourceChecked(false);
         }}>새 제안의 일정·출처를 편집란에 채우기</button>
       </section>}
+      {changedElsewhere && !message && !pending?.conflictTask && <section role="alert" className="space-y-2 text-sm text-amber-900 dark:text-amber-200">
+        <p>다른 화면이나 기기에서 일정이 바뀌었습니다. 작성 중인 내용은 보존했습니다. 최신 내용을 불러온 뒤 다시 편집해 주세요.</p>
+        <button type="button" disabled={busy} className={actionButtonClass} onClick={reloadLatest}>내 편집 버리고 최신 내용 불러오기</button>
+      </section>}
       {task.deletedAt ? <button type="button" disabled={busy} className={actionButtonClass} onClick={() => void run(() => actions.restoreAction(task.id, revision), "같은 일정으로 복원했습니다. 창을 닫고 확인하세요.")}>이 일정 복원</button> :
-        <form className="space-y-4" onSubmit={event => { event.preventDefault(); void run(() => actions.updateAction(task.id, revision, form, sourceChecked), "저장했습니다. 창을 닫고 달력에서 확인하세요."); }}>
+        <form className="space-y-4" onSubmit={event => { event.preventDefault(); if (!detailsValid || changedElsewhere) return; void run(() => actions.updateAction(task.id, revision, { ...form, ...details }, sourceChecked), "저장했습니다. 창을 닫고 달력에서 확인하세요."); }}>
           <fieldset disabled={busy || Boolean(pending?.conflictTask) || Boolean(message)} className="space-y-4 disabled:opacity-60">
             <legend className="mb-3 font-semibold">일정 수정</legend>
             {field("text", "일정 이름")}
@@ -90,12 +115,23 @@ export function ActionDetailDialog({ task, proposal, pending, actions, onClose, 
               {field("sourceUrl", "출처 주소")}{field("sourceLabel", "출처 이름")}
               <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={sourceChecked} onChange={event => setSourceChecked(event.target.checked)} className="h-5 w-5 accent-teal-700" />출처를 열어 위 날짜와 내용을 직접 대조했습니다.</label>
             </>}
+            {onUpdateDetails && <TaskDetailsEditor key={editorVersion} task={task} onSave={onUpdateDetails} embedded onDraftChange={(changes, valid) => { setDetails(changes); setDetailsValid(valid); }} />}
             <div className="flex flex-wrap gap-2">
-              <button type="submit" className={actionButtonClass + " bg-teal-700 !text-white hover:!bg-teal-800"}>변경 저장</button>
-              <button type="button" className={actionButtonClass} onClick={() => { onDelete(task.id); onClose(); }}>일정 삭제</button>
+              <button type="submit" disabled={!detailsValid || changedElsewhere} className={actionButtonClass + " bg-teal-700 !text-white hover:!bg-teal-800"}>변경 저장</button>
+              <button type="button" className={actionButtonClass} onClick={requestClose}>편집 취소</button>
+              <button type="button" className={actionButtonClass} onClick={() => { if (confirmDiscard()) { onDelete(task.id); onClose(); } }}>일정 삭제</button>
             </div>
           </fieldset>
         </form>}
+      {!task.deletedAt && !pending?.conflictTask && !message && <section className="space-y-3 border-t border-slate-200 pt-4 dark:border-neutral-800">
+        {task.isDone && <p className="text-sm">완료 날짜 · {completionDay(task) ?? "미상 (완료 시각이 없는 기존 기록)"}</p>}
+        {task.skippedAt && <p className="text-sm">이번 반복 회차는 건너뛴 기록입니다.</p>}
+        {onToggle && form.registrationState !== "CANDIDATE" && !task.skippedAt && <button type="button" disabled={busy || !detailsValid || changedElsewhere} className={actionButtonClass} onClick={() => void run(async () => { await actions.updateAction(task.id, revision, { ...form, ...details, isDone: !task.isDone }, sourceChecked); onClose(); }, "완료 상태를 저장했습니다.")}>{task.isDone ? "완료 취소" : "완료 처리"}</button>}
+        {onSkipOccurrence && task.recurrence && !task.isDone && !task.skippedAt && <>
+          <button type="button" disabled={busy || hasUnsavedChanges || changedElsewhere} className={actionButtonClass} onClick={() => void run(async () => { await onSkipOccurrence(task.id); onClose(); }, "이번 회차를 건너뛰었습니다.")}>이번 회차 건너뛰기</button>
+          {hasUnsavedChanges && <p className="text-sm text-slate-600 dark:text-neutral-300">변경 내용을 먼저 저장한 뒤 이번 회차를 건너뛸 수 있습니다.</p>}
+        </>}
+      </section>}
       {error && <p role="alert" className="break-words text-sm text-red-800 dark:text-red-200">{error}</p>}
       {message && <p role="status" className="text-sm font-medium text-teal-800 dark:text-teal-200">{message}</p>}
     </div>

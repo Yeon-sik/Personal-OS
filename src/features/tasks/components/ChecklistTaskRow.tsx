@@ -1,4 +1,4 @@
-import type { PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {
   CalendarCheck,
   CalendarDays,
@@ -7,7 +7,9 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { Task } from "../../../types";
+import type { Task, TaskDetailsChanges } from "../../../types";
+import { TaskDetailsEditor } from "./TaskDetailsEditor";
+import { completionDay } from "../taskPlanningPresentation";
 import { ActionSummary } from "../../actions/ActionSummary";
 import type { TaskDropPlacement } from "../taskReorder";
 
@@ -16,6 +18,9 @@ interface ChecklistTaskRowProps {
   isDragging: boolean;
   isDropTarget: boolean;
   task: Task;
+  onUpdateDetails?: (id: string, changes: TaskDetailsChanges) => void | Promise<void>;
+  onSkipOccurrence?: (id: string) => void | Promise<void>;
+  onDirtyChange?: (id: string, dirty: boolean) => void;
   today: string;
   onDelete: (taskId: string) => void;
   onPointerDown: (
@@ -37,6 +42,9 @@ export function ChecklistTaskRow({
   isDragging,
   isDropTarget,
   task,
+  onUpdateDetails,
+  onSkipOccurrence,
+  onDirtyChange,
   today,
   onDelete,
   onPointerDown,
@@ -45,6 +53,16 @@ export function ChecklistTaskRow({
   onUpdateSchedule,
   onUpdateText,
 }: ChecklistTaskRowProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsDirty, setDetailsDirty] = useState(false);
+  const reportDirty = useCallback((dirty: boolean) => {
+    setDetailsDirty(dirty); onDirtyChange?.(task.id, dirty);
+  }, [onDirtyChange, task.id]);
+  useEffect(() => () => { onDirtyChange?.(task.id, false); }, [onDirtyChange, task.id]);
+  function leaveDetails(work: () => void) {
+    if (detailsDirty && !window.confirm("저장하지 않은 세부 편집을 버리고 계속할까요?")) return;
+    setDetailsOpen(false); reportDirty(false); work();
+  }
   const dropTargetClass = isDropTarget
     ? dragOverPlacement === "before"
       ? "border-t-indigo-500 bg-indigo-50 dark:bg-indigo-950/50"
@@ -75,7 +93,7 @@ export function ChecklistTaskRow({
         <button
           type="button"
           onPointerDown={(event) => onPointerDown(event, task.id)}
-          className="inline-flex h-7 w-6 shrink-0 touch-none cursor-grab items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing dark:text-neutral-500 dark:hover:bg-neutral-900 dark:hover:text-neutral-200"
+          className="inline-flex min-h-11 min-w-11 shrink-0 touch-none cursor-grab items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing dark:text-neutral-500 dark:hover:bg-neutral-900 dark:hover:text-neutral-200"
           title="순서 변경"
           aria-label={`${task.text || "할 일"} 순서 변경`}
         >
@@ -85,7 +103,8 @@ export function ChecklistTaskRow({
         <input
           type="checkbox"
           checked={task.isDone}
-          onChange={() => onToggle(task.id)}
+          disabled={Boolean(task.skippedAt)}
+          onChange={() => leaveDetails(() => onToggle(task.id))}
           className="h-4 w-4 shrink-0 rounded border-slate-300 text-teal-700"
           aria-label="완료 여부"
         />
@@ -101,16 +120,16 @@ export function ChecklistTaskRow({
         />
         <button
           type="button"
-          onClick={() =>
+          onClick={() => leaveDetails(() =>
             onUpdatePlannedDate(
               task.id,
               task.plannedDate === today ? null : today,
-            )
+            ))
           }
           className={
             task.plannedDate === today
-              ? "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-fuchsia-100 text-fuchsia-700 transition hover:bg-fuchsia-200 dark:bg-fuchsia-950/50 dark:text-fuchsia-200"
-              : "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-fuchsia-50 hover:text-fuchsia-700 dark:text-neutral-500 dark:hover:bg-fuchsia-950/40 dark:hover:text-fuchsia-200"
+              ? "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md bg-fuchsia-100 text-fuchsia-700 transition hover:bg-fuchsia-200 dark:bg-fuchsia-950/50 dark:text-fuchsia-200"
+              : "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-fuchsia-50 hover:text-fuchsia-700 dark:text-neutral-500 dark:hover:bg-fuchsia-950/40 dark:hover:text-fuchsia-200"
           }
           title={
             task.plannedDate === today
@@ -131,8 +150,8 @@ export function ChecklistTaskRow({
         </button>
         <button
           type="button"
-          onClick={() => onDelete(task.id)}
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-700 dark:text-neutral-500 dark:hover:bg-red-950/50 dark:hover:text-red-300"
+          onClick={() => leaveDetails(() => onDelete(task.id))}
+          className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-700 dark:text-neutral-500 dark:hover:bg-red-950/50 dark:hover:text-red-300"
           title="할 일 삭제"
           aria-label="할 일 삭제"
         >
@@ -171,6 +190,18 @@ export function ChecklistTaskRow({
             aria-label={`${task.text || "할 일"} 마감 시간`}
           />
         </label>
+      </div>}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-8 text-sm text-slate-600 dark:text-neutral-300">
+        {task.category && <span>{task.category}</span>}
+        {Boolean(task.checklist?.length) && <span>하위 항목 {task.checklist!.filter(item => item.isDone).length}/{task.checklist!.length}</span>}
+        {task.recurrence && <span>반복 · {task.recurrence.interval}{task.recurrence.frequency === "DAILY" ? "일" : task.recurrence.frequency === "WEEKLY" ? "주" : "개월"}마다</span>}
+        {task.isDone && <span>완료 · {completionDay(task) ?? "날짜 미상"}</span>}
+        {task.skippedAt && <span>이번 회차 건너뜀</span>}
+        {task.projectActionId && <span>프로젝트 작업 연결됨</span>}
+      </div>
+      {onUpdateDetails && <div className="pl-8">
+        <button type="button" aria-expanded={detailsOpen} onClick={() => { if (detailsOpen) leaveDetails(() => undefined); else setDetailsOpen(true); }} className="inline-flex min-h-11 items-center rounded-md px-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600 dark:text-teal-200 dark:hover:bg-teal-950/50">{detailsOpen ? "세부 내용 접기" : "설명 · 하위 항목 · 반복 설정"}</button>
+        {detailsOpen && <TaskDetailsEditor task={task} onSave={onUpdateDetails} onSkipOccurrence={onSkipOccurrence} onDirtyChange={reportDirty} onCancel={() => { setDetailsOpen(false); reportDirty(false); }} />}
       </div>}
     </div>
   );

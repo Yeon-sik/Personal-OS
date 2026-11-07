@@ -1,14 +1,18 @@
 import { useCallback } from "react";
-import type { Device, LocalDataSnapshot, Task } from "../../types";
+import type { Device, LocalDataSnapshot, Task, TaskDetailsChanges } from "../../types";
 import type { SnapshotUpdater } from "../../app/sync/useSnapshotStore";
 import { applyImportedTasks, editAction, prepareImport, type ActionEdit, type ImportOutcome, type ImportSelection } from "./actionImport";
 import { actionId } from "./actionIdentity";
 import { nextTaskTimestamp } from "./actionModel";
 import type { PendingRevision } from "../../lib/sync/syncState";
+import { editTaskDetails, taskCompletionFields, validateTaskPlanning } from "../tasks/taskPlanning";
+import { applyPreparedTaskTransition, prepareTaskTransition } from "../tasks/taskRecurrence";
+
+export type ActionUpdateChanges = Partial<ActionEdit & TaskDetailsChanges & Pick<Task, "isDone">>;
 
 export interface ActionActions {
   importActions: (selection: ImportSelection[]) => Promise<ImportOutcome[]>;
-  updateAction: (id: string, revision: string, changes: Partial<ActionEdit>, sourceChecked?: boolean) => Promise<void>;
+  updateAction: (id: string, revision: string, changes: ActionUpdateChanges, sourceChecked?: boolean) => Promise<void>;
   resolveActionConflict: (id: string, keepLocal: boolean) => Promise<void>;
   adoptLocalActions: () => Promise<void>;
   restoreAction: (id: string, revision: string) => Promise<void>;
@@ -19,8 +23,9 @@ interface Options {
   userId: string;
   isAuthenticated: boolean;
   commitDurably: (updater: SnapshotUpdater, track?: boolean) => Promise<void>;
+  transformTaskSnapshot?: (snapshot: LocalDataSnapshot, changedTask: Task) => LocalDataSnapshot;
 }
-export function useActionActions({ snapshot, device, userId, isAuthenticated, commitDurably }: Options): ActionActions {
+export function useActionActions({ snapshot, device, userId, isAuthenticated, commitDurably, transformTaskSnapshot }: Options): ActionActions {
   const ownerScope = snapshot.syncState?.scope?.userId ?? (isAuthenticated ? userId : "local:" + device?.id);
   const importActions = useCallback(async (selection: ImportSelection[]) => {
     if (!device) throw new Error("앱이 준비된 뒤 다시 시도해 주세요.");
@@ -32,14 +37,37 @@ export function useActionActions({ snapshot, device, userId, isAuthenticated, co
     });
     return outcomes;
   }, [device, ownerScope, commitDurably]);
-  const updateAction = useCallback(async (id: string, revision: string, changes: Partial<ActionEdit>, sourceChecked = false) => {
+  const updateAction = useCallback(async (id: string, revision: string, changes: ActionUpdateChanges, sourceChecked = false) => {
     if (!device) throw new Error("앱이 준비되지 않았습니다.");
+    const original = snapshot.tasks.find(row => row.id === id);
+    if (!original || original.deletedAt || original.updatedAt !== revision) throw new Error("일정이 변경되었습니다. 상세를 다시 열고 확인해 주세요.");
+    const { isDone, description, category, checklist, recurrence, projectActionId, ...actionChanges } = changes;
+    let edited = editAction(original, actionChanges, device.id, ownerScope, sourceChecked);
+    const details: TaskDetailsChanges = {};
+    if (description !== undefined) details.description = description;
+    if (category !== undefined) details.category = category;
+    if (checklist !== undefined) details.checklist = checklist;
+    if (recurrence !== undefined) details.recurrence = recurrence;
+    if (projectActionId !== undefined) details.projectActionId = projectActionId;
+    if (edited.registrationState === "CANDIDATE") {
+      if (isDone) throw new Error("후보 일정은 확정한 뒤 완료할 수 있습니다.");
+      edited = { ...edited, isDone: false, ...taskCompletionFields(original, false, edited.updatedAt) };
+    }
+    if (Object.keys(details).length) edited = editTaskDetails(edited, details, snapshot.tasks, device.id);
+    validateTaskPlanning(edited);
+    const prepared = isDone !== undefined && edited.registrationState !== "CANDIDATE"
+      ? await prepareTaskTransition(edited, isDone ? "COMPLETE" : "REOPEN", device.id, ownerScope)
+      : { task: edited };
     await commitDurably(current => {
       const task = current.tasks.find(row => row.id === id);
-      if (!task || task.deletedAt || task.updatedAt !== revision) throw new Error("일정이 변경되었습니다. 상세를 다시 열고 확인해 주세요.");
-      return { ...current, tasks: current.tasks.map(row => row.id === id ? editAction(row, changes, device.id, ownerScope, sourceChecked) : row) };
+      if (!task || task.deletedAt || task.updatedAt !== revision ||
+          JSON.stringify(current.syncState?.scope) !== JSON.stringify(snapshot.syncState?.scope)) {
+        throw new Error("일정이나 계정이 변경되었습니다. 상세를 다시 열고 확인해 주세요.");
+      }
+      const next = applyPreparedTaskTransition(current, prepared);
+      return transformTaskSnapshot?.(next, prepared.task) ?? next;
     });
-  }, [commitDurably, device, ownerScope]);
+  }, [snapshot, commitDurably, device, ownerScope, transformTaskSnapshot]);
   const restoreAction = useCallback(async (id: string, revision: string) => {
     if (!device) return;
     await commitDurably(current => {

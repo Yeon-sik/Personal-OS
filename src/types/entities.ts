@@ -25,7 +25,7 @@ export interface Note extends SyncableEntity {
   content: string;
 }
 
-export interface Task extends SyncableEntity, Partial<import("./action").TaskActionFields> {
+export interface Task extends SyncableEntity, Partial<import("./action").TaskActionFields>, Partial<import("./taskPlanning").TaskPlanningFields> {
   /** Local identity scope; remote rows derive this from their authenticated owner. */
   actionOwnerScope?: string;
   text: string;

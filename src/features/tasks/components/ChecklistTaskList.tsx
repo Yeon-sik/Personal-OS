@@ -1,5 +1,5 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
-import type { Task } from "../../../types";
+import type { Task, TaskDetailsChanges } from "../../../types";
 import type { TaskDropPlacement } from "../taskReorder";
 import { ChecklistTaskRow } from "./ChecklistTaskRow";
 
@@ -9,6 +9,9 @@ interface ChecklistTaskListProps {
   draggedTaskId: string | null;
   emptyText: string;
   items: Task[];
+  onUpdateDetails?: (id: string, changes: TaskDetailsChanges) => void | Promise<void>;
+  onSkipOccurrence?: (id: string) => void | Promise<void>;
+  onDirtyChange?: (id: string, dirty: boolean) => void;
   today: string;
   onDelete: (taskId: string) => void;
   onPointerDown: (
@@ -31,6 +34,9 @@ export function ChecklistTaskList({
   draggedTaskId,
   emptyText,
   items,
+  onUpdateDetails,
+  onSkipOccurrence,
+  onDirtyChange,
   today,
   onDelete,
   onPointerDown,
@@ -59,6 +65,9 @@ export function ChecklistTaskList({
           }
           task={task}
           today={today}
+          onUpdateDetails={onUpdateDetails}
+          onSkipOccurrence={onSkipOccurrence}
+          onDirtyChange={onDirtyChange}
           onDelete={onDelete}
           onPointerDown={onPointerDown}
           onToggle={onToggle}

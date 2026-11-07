@@ -148,13 +148,26 @@ export function createSupabaseSnapshotTransport(
         }
       }
     },
-    upsertRows<Row>(
+    async upsertRows<Row>(
       tableName: SnapshotTableName,
       values: Row | Row[],
       onConflict: string,
     ) {
       const table = supabase.from(tableName) as unknown as UpsertTable<Row>;
-      return table.upsert(values, { onConflict });
+      if (tableName !== "tasks" || !Array.isArray(values)) return table.upsert(values, { onConflict });
+      // PostgREST uses the union of JSON keys in a bulk upsert. Keep legacy
+      // rows separate so omitted workflow fields cannot become SQL nulls.
+      const groups = new Map<string, Row[]>();
+      for (const row of values) {
+        const key = JSON.stringify(Object.keys(row as object).sort());
+        const group = groups.get(key) ?? [];
+        group.push(row); groups.set(key, group);
+      }
+      for (const rows of groups.values()) {
+        const result = await table.upsert(rows, { onConflict });
+        if (result.error) return result;
+      }
+      return { error: null };
     },
   };
 }
@@ -577,7 +590,11 @@ export interface PushSnapshotResult {
 }
 
 export function pushBatches(payload: PushPayload) {
-  return WRITE_COLLECTIONS.map(([collection, tableName]) => ({ collection, tableName, rows: payload[collection] }));
+  const batches = WRITE_COLLECTIONS.map(([collection, tableName]) => ({ collection, tableName, rows: payload[collection] }));
+  const tasks = batches.find(batch => batch.collection === "tasks")!;
+  // A Task may link an offline-created project action; send the parent first.
+  return batches.flatMap(batch => batch.collection === "tasks" ? [] :
+    batch.collection === "projectActions" ? [batch, tasks] : [batch]);
 }
 
 /** Maps only the requested table, for delta pulls and ID-scoped confirmation. */
@@ -632,11 +649,11 @@ export async function pushSnapshot(
     { tableName: "projects", rows: payload.projects },
     { tableName: "workstreams", rows: payload.workstreams },
     { tableName: "notes", rows: payload.notes },
-    { tableName: "tasks", rows: payload.tasks },
     // Parents must arrive before children so the composite ownership FK is
     // satisfied on every device, including a first sync of a new project.
     { tableName: "project_milestones", rows: payload.projectMilestones },
     { tableName: "project_actions", rows: payload.projectActions },
+    { tableName: "tasks", rows: payload.tasks },
     { tableName: "project_ideas", rows: payload.projectIdeas },
     { tableName: "project_history", rows: payload.projectHistory },
     { tableName: "workstream_projects", rows: payload.workstreamProjects },

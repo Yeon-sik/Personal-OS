@@ -1,4 +1,5 @@
 import type { Task } from "../../types";
+import { normalizeTaskPlanningFields } from "../tasks/taskPlanning";
 import { ACTION_KINDS, type TaskActionFields } from "../../types/action";
 
 export const ACTION_DEFAULTS: TaskActionFields = {
@@ -35,7 +36,8 @@ export function isImportedAction(task: Task): boolean { return Boolean(task.exte
 export function sameActionContent(a: Task, b: Task): boolean {
   const timestamp = (value: string | null | undefined) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : value ?? null;
   const content = (task: Task) => ({
-    ...normalizeActionFields(task), text: task.text, isDone: task.isDone,
+    ...normalizeActionFields(task), ...normalizeTaskPlanningFields(task), text: task.text, isDone: task.isDone,
+    completedAt: timestamp(task.completedAt), skippedAt: timestamp(task.skippedAt),
     dueDate: task.dueDate, dueTime: task.dueTime, plannedDate: task.plannedDate,
     deletedAt: timestamp(task.deletedAt),
     sourceCheckedAt: timestamp(task.sourceCheckedAt),

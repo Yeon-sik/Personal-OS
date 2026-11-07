@@ -1,4 +1,4 @@
-import { actionFieldsFromRow, actionFieldsToRow } from "./actionFields";
+import { actionFieldsFromRow, actionFieldsToRow, taskPlanningFieldsFromRow, taskPlanningFieldsToRow } from "./actionFields";
 import type {
   Device,
   FitnessSummaryProjectionV2,
@@ -90,6 +90,7 @@ export function noteFromRow(row: NoteRow): Note {
 export function taskFromRow(row: TaskRow): Task {
   return {
     ...actionFieldsFromRow(row),
+    ...taskPlanningFieldsFromRow(row),
     actionOwnerScope: row.user_id,
     ...auditFieldsFromRow(row, row.updated_at),
     id: row.id,
@@ -424,6 +425,7 @@ export function noteToRow(note: Note, userId: string): NoteRow {
 export function taskToRow(task: Task, userId: string): TaskRow {
   return {
     ...actionFieldsToRow(task),
+    ...taskPlanningFieldsToRow(task),
     ...auditFieldsToRow(task),
     id: task.id,
     user_id: userId,

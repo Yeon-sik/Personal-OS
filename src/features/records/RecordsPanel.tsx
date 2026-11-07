@@ -15,6 +15,8 @@ import { FinanceDailyCard } from "./components/FinanceDailyCard";
 import { RecordsOverview } from "./components/RecordsOverview";
 import { SelectedDateRecords } from "./components/SelectedDateRecords";
 import { RecordCalendar } from "./RecordCalendar";
+import { ScheduleTimeline } from "./ScheduleTimeline";
+import type { TaskDetailsChanges } from "../../types";
 import { getCalendarMarkers, getRecordsForDate } from "./recordAggregation";
 import type { Task } from "../../types";
 import type { ActionActions } from "../actions/useActionActions";
@@ -26,6 +28,8 @@ import { isUndatedAction, firstActionDate } from "../actions/actionCalendar";
 
 interface RecordsPanelProps {
   actionActions?: ActionActions;
+  onUpdateDetails?: (id: string, changes: TaskDetailsChanges) => void | Promise<void>;
+  onSkipOccurrence?: (id: string) => void | Promise<void>;
   onManualSync?: () => Promise<void>;
   isAuthenticated?: boolean;
   selectedDate: string;
@@ -57,6 +61,8 @@ interface RecordsPanelProps {
 
 export function RecordsPanel({
   actionActions,
+  onUpdateDetails,
+  onSkipOccurrence,
   onManualSync,
   isAuthenticated,
   selectedDate,
@@ -73,6 +79,7 @@ export function RecordsPanel({
 }: RecordsPanelProps) {
   const today = formatLocalDate();
   const [visibleMonth, setVisibleMonth] = useState(selectedDate);
+  const [calendarView, setCalendarView] = useState<"month" | "week" | "day">("month");
   const [importOpen, setImportOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [proposal, setProposal] = useState<Task | undefined>();
@@ -80,7 +87,7 @@ export function RecordsPanel({
   const [hideCompleted, setHideCompleted] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const calendarSnapshot = useMemo(() => ({ ...snapshot, tasks: snapshot.tasks.filter(task =>
-    (showCandidates || task.registrationState !== "CANDIDATE") && (!hideCompleted || !task.isDone)) }), [snapshot, showCandidates, hideCompleted]);
+    (showCandidates || task.registrationState !== "CANDIDATE") && (!hideCompleted || (!task.isDone && !task.skippedAt))) }), [snapshot, showCandidates, hideCompleted]);
   const undated = calendarSnapshot.tasks.filter(isUndatedAction);
   const detailTask = snapshot.tasks.find(task => task.id === detailId);
   const conflicts = snapshot.syncState?.pending.filter(item => item.conflictTask) ?? [];
@@ -142,7 +149,7 @@ export function RecordsPanel({
       </div>
       <div className="flex flex-wrap gap-4 text-sm text-slate-700 dark:text-neutral-200">
         <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={showCandidates} onChange={event => setShowCandidates(event.target.checked)} className="h-5 w-5 accent-teal-700" />후보 함께 보기</label>
-        <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={hideCompleted} onChange={event => setHideCompleted(event.target.checked)} className="h-5 w-5 accent-teal-700" />완료 숨기기</label>
+        <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={hideCompleted} onChange={event => setHideCompleted(event.target.checked)} className="h-5 w-5 accent-teal-700" />완료·건너뜀 숨기기</label>
       </div>
       {conflicts.length > 0 && <div role="status" className="rounded-md border border-amber-400 p-3 text-sm">
         <p className="font-semibold">기존 일정과 다른 제안 {conflicts.length}개</p>
@@ -153,14 +160,15 @@ export function RecordsPanel({
         <button type="button" className={actionButtonClass} onClick={() => { setActionError(null); void actionActions.adoptLocalActions().then(() => onManualSync?.()).catch(error => setActionError(error instanceof Error ? error.message : "계정 가져오기에 실패했습니다.")); }}>현재 계정으로 가져오기</button>
       </div>}
       {actionError && <p role="alert" className="text-sm text-red-800 dark:text-red-200">{actionError}</p>}
-      <RecordCalendar
+      <div role="group" aria-label="일정 보기 방식" className="flex gap-2">{([["month", "월"], ["week", "주"], ["day", "일"]] as const).map(([mode, label]) => <button key={mode} type="button" aria-pressed={calendarView === mode} onClick={() => setCalendarView(mode)} className={actionButtonClass + (calendarView === mode ? " bg-teal-50 font-semibold dark:bg-teal-950" : "")}>{label}</button>)}</div>
+      {calendarView === "month" ? <RecordCalendar
         markerByDate={markerByDate}
         financeByDate={financeByDate}
         selectedDate={selectedDate}
         visibleMonth={visibleMonth}
         onSelectDate={onSelectDate}
         onVisibleMonthChange={setVisibleMonth}
-      />
+      /> : <ScheduleTimeline tasks={calendarSnapshot.tasks} selectedDate={selectedDate} view={calendarView} onSelectDate={onSelectDate} onOpenTask={actionActions ? openTask : undefined} />}
 
       <FinanceDailyCard
         financeEnabled={financeEnabled}
@@ -212,6 +220,7 @@ export function RecordsPanel({
       {importOpen && actionActions && <ActionImportDialog tasks={snapshot.tasks} actions={actionActions} onClose={() => setImportOpen(false)} onOpenTask={openTask} />}
       {detailTask && actionActions && <ActionDetailDialog key={detailTask.id} task={detailTask} proposal={proposal}
         pending={snapshot.syncState?.pending.find(item => item.collection === "tasks" && item.id === detailTask.id)}
+        onUpdateDetails={onUpdateDetails} onSkipOccurrence={onSkipOccurrence} onToggle={onToggleTask}
         actions={actionActions} onClose={() => { setDetailId(null); setProposal(undefined); }} onDelete={onDeleteTask} onSync={onManualSync} />}
     </section>
   );

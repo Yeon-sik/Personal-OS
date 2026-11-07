@@ -81,6 +81,7 @@ interface UseDevControlActionsOptions {
 }
 
 export interface DevControlActions {
+  planProjectAction?: (id: string, date?: string) => void;
   addProject: (input: {
     name: string;
     description?: string;

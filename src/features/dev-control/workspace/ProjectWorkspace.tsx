@@ -118,6 +118,9 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export interface ProjectWorkspaceProps {
+  projectTaskLinks?: Record<string, string | null>;
+  taskPlanningError?: string | null;
+  embedded?: boolean;
   mode: ProjectWorkspaceMode;
   project: Project | null;
   projects: Project[];
@@ -137,6 +140,9 @@ export interface ProjectWorkspaceProps {
 }
 
 export function ProjectWorkspace({
+  projectTaskLinks = {},
+  taskPlanningError,
+  embedded = false,
   mode,
   project,
   projects,
@@ -459,7 +465,7 @@ export function ProjectWorkspace({
   }
 
   return (
-    <div className="app-shell flex w-full min-w-0 justify-center bg-slate-200 text-slate-900 dark:bg-black dark:text-neutral-100">
+    <div className={(embedded ? "h-full min-h-0 " : "app-shell ") + "flex w-full min-w-0 justify-center bg-slate-200 text-slate-900 dark:bg-black dark:text-neutral-100"}>
       <div className="flex h-full min-h-0 w-full min-w-0 max-w-[1100px] flex-col bg-slate-100 p-4 dark:bg-black">
         <header className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -470,6 +476,7 @@ export function ProjectWorkspace({
           {project ? <span className="rounded-full border border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:border-neutral-700 dark:text-neutral-300">{statusLabels[project.status]}</span> : null}
         </header>
 
+        {taskPlanningError && <p role="alert" className="mb-3 rounded border border-rose-700 p-2 text-sm text-rose-800 dark:text-rose-200">{taskPlanningError}</p>}
         <nav className="mb-3 grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-white p-1 dark:border-neutral-800 dark:bg-neutral-950 sm:grid-cols-4">
           {(["overview", "github", "plan", "history"] as const).map((tab) => (
             <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={`rounded px-2 py-1.5 text-xs font-semibold transition ${activeTab === tab ? "bg-slate-900 text-white dark:bg-white dark:text-black" : "text-slate-500 hover:bg-slate-100 dark:text-neutral-400 dark:hover:bg-neutral-900"}`}>
@@ -546,7 +553,30 @@ export function ProjectWorkspace({
           {activeTab === "plan" ? (
             <div className="grid gap-3">
               <Section title="마일스톤"><form className="mb-2 flex gap-2" onSubmit={submitMilestone}><input className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1.5 text-xs dark:border-neutral-700 dark:bg-neutral-950" placeholder="마일스톤 추가" value={milestoneTitle} onChange={(event) => setMilestoneTitle(event.target.value)} /><button type="submit" disabled={!project} className="rounded bg-slate-800 px-2 text-xs text-white disabled:opacity-50">추가</button></form><div className="grid gap-1">{selectedMilestones.map((item) => <div key={item.id} className="flex flex-wrap items-center gap-2 rounded border border-slate-200 p-2 text-xs dark:border-neutral-800"><input className="min-w-0 flex-1 bg-transparent" value={item.title} onChange={(event) => actions.updateProjectMilestone(item.id, { title: event.target.value })} /><select className="rounded border border-slate-200 bg-transparent text-[10px] dark:border-neutral-700" value={item.status} onChange={(event) => actions.updateProjectMilestone(item.id, { status: event.target.value as DevMilestoneStatus })}>{MILESTONE_STATUSES.map((status) => <option key={status} value={status}>{MILESTONE_STATUS_LABELS[status]}</option>)}</select><button type="button" onClick={() => actions.deleteProjectMilestone(item.id)} className="text-rose-600">삭제</button></div>)}</div></Section>
-              <Section title="다음 작업 / 나중에 / 차단됨"><form className="mb-2 flex flex-wrap gap-2" onSubmit={submitAction}><input className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1.5 text-xs dark:border-neutral-700 dark:bg-neutral-950" placeholder="다음 작업 추가" value={actionTitle} onChange={(event) => setActionTitle(event.target.value)} /><select className="rounded border border-slate-300 bg-transparent text-[10px] dark:border-neutral-700" value={actionType} onChange={(event) => setActionType(event.target.value as DevActionType)}>{ACTION_TYPES.map((type) => <option key={type} value={type}>{ACTION_TYPE_LABELS[type]}</option>)}</select><button type="submit" disabled={!project} className="rounded bg-slate-800 px-2 text-xs text-white disabled:opacity-50">추가</button></form><div className="grid gap-1">{ACTION_TYPES.map((type) => <div key={type} className="grid gap-1"><p className="text-[10px] font-semibold text-slate-500">{ACTION_TYPE_LABELS[type]}</p>{selectedActions.filter((item) => item.type === type).map((item) => <div key={item.id} className="flex flex-wrap items-center gap-2 rounded border border-slate-200 p-2 text-xs dark:border-neutral-800"><input className="min-w-0 flex-1 bg-transparent" value={item.title} onChange={(event) => actions.updateProjectAction(item.id, { title: event.target.value })} /><select className="rounded border border-slate-200 bg-transparent text-[10px] dark:border-neutral-700" value={item.status} onChange={(event) => actions.updateProjectAction(item.id, { status: event.target.value as DevActionStatus })}>{ACTION_STATUSES.map((status) => <option key={status} value={status}>{ACTION_STATUS_LABELS[status]}</option>)}</select><button type="button" onClick={() => actions.deleteProjectAction(item.id)} className="text-rose-600">삭제</button></div>)}</div>)}</div></Section>
+              <Section title="다음 작업 / 나중에 / 차단됨">
+                <form className="mb-2 flex flex-wrap gap-2" onSubmit={submitAction}>
+                  <input className="min-h-11 min-w-0 flex-1 basis-full rounded border border-slate-300 bg-white px-2 text-sm sm:basis-auto dark:border-neutral-700 dark:bg-neutral-950" placeholder="다음 작업 추가" value={actionTitle} onChange={(event) => setActionTitle(event.target.value)} />
+                  <select aria-label="새 프로젝트 작업 유형" className="min-h-11 rounded border border-slate-300 bg-transparent px-2 text-sm dark:border-neutral-700" value={actionType} onChange={(event) => setActionType(event.target.value as DevActionType)}>
+                    {ACTION_TYPES.map((type) => <option key={type} value={type}>{ACTION_TYPE_LABELS[type]}</option>)}
+                  </select>
+                  <button type="submit" disabled={!project} className="min-h-11 rounded bg-slate-800 px-3 text-sm text-white disabled:opacity-50">추가</button>
+                </form>
+                <div className="grid gap-2">
+                  {ACTION_TYPES.map((type) => <div key={type} className="grid gap-2">
+                    <p className="text-xs font-semibold text-slate-500">{ACTION_TYPE_LABELS[type]}</p>
+                    {selectedActions.filter((item) => item.type === type).map((item) => <div key={item.id} className="flex flex-wrap items-center gap-2 rounded border border-slate-200 p-2 text-sm dark:border-neutral-800">
+                      <input aria-label="프로젝트 작업 제목" className="min-h-11 min-w-0 flex-1 basis-full bg-transparent md:basis-auto" value={item.title} onChange={(event) => actions.updateProjectAction(item.id, { title: event.target.value })} />
+                      <select aria-label={`${item.title} 상태`} className="min-h-11 rounded border border-slate-200 bg-transparent px-2 text-sm dark:border-neutral-700" value={item.status} onChange={(event) => actions.updateProjectAction(item.id, { status: event.target.value as DevActionStatus })}>
+                        {ACTION_STATUSES.map((status) => <option key={status} value={status}>{ACTION_STATUS_LABELS[status]}</option>)}
+                      </select>
+                      {actions.planProjectAction && <button type="button" disabled={item.status === "DONE"} onClick={() => actions.planProjectAction?.(item.id)} className="min-h-11 rounded border border-teal-700 px-3 text-teal-800 disabled:opacity-50 dark:text-teal-200">
+                        {projectTaskLinks[item.id] ? `${projectTaskLinks[item.id]} 연결됨 · 오늘로` : "오늘 할 일로 연결"}
+                      </button>}
+                      <button type="button" onClick={() => actions.deleteProjectAction(item.id)} className="min-h-11 min-w-11 px-2 text-rose-600">삭제</button>
+                    </div>)}
+                  </div>)}
+                </div>
+              </Section>
               <Section title="아이디어"><form className="mb-2 flex gap-2" onSubmit={submitIdea}><input className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1.5 text-xs dark:border-neutral-700 dark:bg-neutral-950" placeholder="아이디어 추가" value={ideaTitle} onChange={(event) => setIdeaTitle(event.target.value)} /><button type="submit" disabled={!project} className="rounded bg-slate-800 px-2 text-xs text-white disabled:opacity-50">추가</button></form><div className="grid gap-1">{selectedIdeas.map((item) => <div key={item.id} className="flex items-center gap-2 rounded border border-slate-200 p-2 text-xs dark:border-neutral-800"><input className="min-w-0 flex-1 bg-transparent" value={item.title} onChange={(event) => actions.updateProjectIdea(item.id, { title: event.target.value })} /><button type="button" onClick={() => actions.deleteProjectIdea(item.id)} className="text-rose-600">삭제</button></div>)}</div></Section>
             </div>
           ) : null}

@@ -26,6 +26,8 @@ export function ProjectWorkspaceApp() {
       projects={workspaceState.projects}
       projectMilestones={workspaceState.projectMilestones}
       projectActions={workspaceState.projectActions}
+      projectTaskLinks={workspaceState.projectTaskLinks}
+      taskPlanningError={workspaceState.taskPlanningError}
       projectIdeas={workspaceState.projectIdeas}
       projectHistory={workspaceState.projectHistory}
       workstreams={workspaceState.workstreams}

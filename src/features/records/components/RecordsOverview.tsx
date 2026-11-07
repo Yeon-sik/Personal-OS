@@ -111,6 +111,7 @@ export function RecordsOverview({
     ? snapshot.tasks.filter(
         (task) =>
           task.deletedAt === null &&
+          !task.skippedAt &&
           task.plannedDate === activeProductivityPoint.date &&
           !hasBackfillMetadata(task),
       )

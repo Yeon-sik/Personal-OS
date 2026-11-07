@@ -60,6 +60,29 @@ import {
 const USER_ID = "user-1";
 
 describe("Supabase row mappers", () => {
+
+  it("round-trips every Task workflow field without guessing completion time", () => {
+    const task = makeTask({ isDone: true, completedAt: "2026-11-07T01:00:00Z", skippedAt: null,
+      description: "context", category: "work", checklist: [{ id: "a", text: "one step", isDone: true }],
+      recurrence: { frequency: "WEEKLY", interval: 2, anchorDate: "2026-11-07" },
+      recurrenceSeriesId: "series", recurrenceOccurrence: 2, projectActionId: "linked-action" });
+    expect(taskToRow(task, USER_ID)).toMatchObject({ completed_at: task.completedAt, skipped_at: null,
+      description: task.description, category: task.category, checklist: task.checklist, recurrence: task.recurrence,
+      recurrence_series_id: "series", recurrence_occurrence: 2, project_action_id: "linked-action" });
+    expect(taskFromRow(taskToRow(task, USER_ID))).toMatchObject(task);
+    const legacy = taskToRow(makeTask({ isDone: true }), USER_ID);
+    expect(legacy).not.toHaveProperty("completed_at");
+    expect(taskFromRow(legacy).completedAt ?? null).toBeNull();
+    expect(taskToRow(makeTask({ description: "", checklist: [], recurrence: null, category: null }), USER_ID))
+      .toMatchObject({ description: "", checklist: [], recurrence: null, category: null });
+  });
+
+  it("rejects invalid JSON workflow rows instead of losing their details", () => {
+    const row = taskToRow(makeTask(), USER_ID);
+    expect(() => taskFromRow({ ...row, checklist: "invalid" } as unknown as TaskRow)).toThrow("일정 세부 정보");
+    expect(() => taskFromRow({ ...row, recurrence: { frequency: "MONTHLY", interval: 1, anchorDate: "2026-02-30" } })).toThrow("일정 세부 정보");
+  });
+
   it("round-trips every sync entity and device", () => {
     const note = makeNote();
     const task = makeTask({ dueDate: "2026-08-02", dueTime: "09:30" });

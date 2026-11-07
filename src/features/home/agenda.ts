@@ -24,7 +24,7 @@ export function getAgenda(tasks: Task[], now: number): Agenda {
   const today = calendarDate(now);
   const agenda: Agenda = { overdue: [], today: [], upcoming: [], review: [], candidates: [], undated: [] };
   for (const task of tasks) {
-    if (task.deletedAt || task.isDone) continue;
+    if (task.deletedAt || task.isDone || task.skippedAt) continue;
     const action = normalizeActionFields(task);
     if (action.registrationState === "CANDIDATE") {
       agenda.candidates.push(task);

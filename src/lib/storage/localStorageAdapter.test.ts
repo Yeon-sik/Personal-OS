@@ -47,6 +47,36 @@ beforeEach(() => {
 });
 
 describe("LocalStorageAdapter", () => {
+
+  it.each([1, 2])("preserves new Task details, recurrence and completion provenance after v%s reload", async version => {
+    const task = makeTask({ isDone: true, completedAt: "2026-11-07T01:00:00Z", skippedAt: null,
+      description: "keep the full explanation", category: "study", checklist: [{ id: "item", text: "read notes", isDone: true }],
+      recurrence: { frequency: "MONTHLY", interval: 1, anchorDate: "2026-10-31" },
+      recurrenceSeriesId: "series", recurrenceOccurrence: 1, projectActionId: "project-action" });
+    const raw = JSON.stringify({ version, snapshot: makeSnapshot({ tasks: [task] }) });
+    browserStorage.setItem(`localsyncmemo:snapshot:v${version}`, raw);
+    const adapter = new LocalStorageAdapter();
+    const loaded = await adapter.load();
+    expect(loaded.tasks[0]).toMatchObject(task);
+    await adapter.save(loaded);
+    expect((await new LocalStorageAdapter().load()).tasks).toEqual(loaded.tasks);
+    if (version === 1) expect(browserStorage.getItem(STORAGE_KEY)).toBe(raw);
+  });
+
+  it("keeps a legacy completion timestamp unknown", async () => {
+    browserStorage.setItem(STORAGE_KEY, JSON.stringify(makeSnapshot({ tasks: [makeTask({ isDone: true })] })));
+    const task = (await new LocalStorageAdapter().load()).tasks[0];
+    expect(task.isDone).toBe(true);
+    expect(task.completedAt ?? null).toBeNull();
+  });
+
+  it("does not discard a task or replace source JSON when workflow data is corrupt", async () => {
+    const raw = JSON.stringify({ version: 2, snapshot: makeSnapshot({ tasks: [{ ...makeTask(), checklist: { unexpected: true } }] as never }) });
+    browserStorage.setItem("localsyncmemo:snapshot:v2", raw);
+    await expect(new LocalStorageAdapter().load()).rejects.toThrow("기존 데이터는 지우지 말고");
+    expect(browserStorage.getItem("localsyncmemo:snapshot:v2")).toBe(raw);
+  });
+
   it.each([1, 2])("upgrades v%s without losing pending conflict, local-only Action or tombstone", async version => {
     const scope = { backend: "https://example.supabase.co", userId: "owner" };
     const initial = makeTask({ id: "local-action", sourceNamespace: "release-test", externalKey: "same-identity",

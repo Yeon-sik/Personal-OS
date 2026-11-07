@@ -56,6 +56,8 @@ export interface ProjectWorkspaceGitHubState {
 }
 
 export interface ProjectWorkspaceState {
+  projectTaskLinks?: Record<string, string | null>;
+  taskPlanningError?: string | null;
   projects: Project[];
   projectMilestones: ProjectMilestone[];
   projectActions: ProjectAction[];
@@ -90,6 +92,7 @@ export type ProjectWorkspaceMutation =
   | { type: "updateProjectMilestone"; id: string; changes: UpdateMilestoneInput }
   | { type: "deleteProjectMilestone"; id: string }
   | { type: "addProjectAction"; projectId: string; title: string; actionType?: DevActionType; status?: DevActionStatus }
+  | { type: "planProjectAction"; id: string; date?: string }
   | { type: "updateProjectAction"; id: string; changes: UpdateActionInput }
   | { type: "deleteProjectAction"; id: string }
   | { type: "addProjectIdea"; projectId: string; title: string }
@@ -206,6 +209,9 @@ export function useProjectWorkspaceHost({
               break;
             case "addProjectAction":
               current.addProjectAction(payload.projectId, payload.title, payload.actionType, payload.status);
+              break;
+            case "planProjectAction":
+              current.planProjectAction?.(payload.id, payload.date);
               break;
             case "updateProjectAction":
               current.updateProjectAction(payload.id, payload.changes);
@@ -373,6 +379,7 @@ export function useProjectWorkspaceClient() {
     updateProjectMilestone: (id, changes) => void emitMutation({ type: "updateProjectMilestone", id, changes }),
     deleteProjectMilestone: (id) => void emitMutation({ type: "deleteProjectMilestone", id }),
     addProjectAction: (projectId, title, actionType, status) => void emitMutation({ type: "addProjectAction", projectId, title, actionType, status }),
+    planProjectAction: (id, date) => void emitMutation({ type: "planProjectAction", id, date }),
     updateProjectAction: (id, changes) => void emitMutation({ type: "updateProjectAction", id, changes }),
     deleteProjectAction: (id) => void emitMutation({ type: "deleteProjectAction", id }),
     addProjectIdea: (projectId, title) => void emitMutation({ type: "addProjectIdea", projectId, title }),
@@ -433,6 +440,8 @@ export function useProjectWorkspaceClient() {
 }
 
 export function projectWorkspaceStateFromRuntime({
+  projectTaskLinks,
+  taskPlanningError,
   projects,
   projectMilestones,
   projectActions,
@@ -449,6 +458,8 @@ export function projectWorkspaceStateFromRuntime({
   github,
 }: Omit<ProjectWorkspaceState, "github"> & { github: GitHubIntegrationController }): ProjectWorkspaceState {
   return {
+    projectTaskLinks,
+    taskPlanningError,
     projects,
     projectMilestones,
     projectActions,

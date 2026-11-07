@@ -2,22 +2,25 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HomePanelProps } from "../features/home/HomePanel";
 import { App } from "./App";
-import type { Task } from "../types";
+import type { Project, Task } from "../types";
+import type { ProjectWorkspaceProps } from "../features/dev-control/workspace/ProjectWorkspace";
+import { entity } from "../features/home/testFixtures";
 import type { ActionActions } from "../features/actions/useActionActions";
 import { task } from "../features/home/testFixtures";
 
 const harness = vi.hoisted(() => ({
+  isDesktop: true,
   openWorkspace: vi.fn().mockResolvedValue(undefined),
   quickOpen: vi.fn(),
   runtime: {
     notes: [], tasks: [] as Task[], workoutRecords: [], fitnessSummaryProjections: [],
     actionActions: {} as ActionActions,
-    mealRecords: [], weightRecords: [], activeDevices: [], projects: [],
+    mealRecords: [], weightRecords: [], activeDevices: [], projects: [] as Project[],
     projectMilestones: [], projectActions: [], projectIdeas: [], projectHistory: [],
     workstreams: [], workstreamProjects: [], workstreamMilestones: [],
     workstreamActions: [], workstreamActionProjects: [], workstreamActionDependencies: [],
     knowledgeDocuments: [], device: null, selectedNote: null, selectedNoteId: null,
-    selectedProjectId: null, selectedWorkstreamId: null, isReady: true, error: null,
+    selectedProjectId: null as string | null, selectedWorkstreamId: null, isReady: true, error: null,
     saveState: "saved", syncStatus: { mode: "local-only", label: "local-only", detail: "Local data only", isOnline: true },
     addNote: vi.fn(), addNoteForDate: vi.fn(), addTask: vi.fn(), deleteNote: vi.fn(), deleteTask: vi.fn(),
     selectNote: vi.fn(), updateSelectedNoteTitle: vi.fn(), updateSelectedNoteContent: vi.fn(),
@@ -25,10 +28,21 @@ const harness = vi.hoisted(() => ({
     setSelectedProjectId: vi.fn(), setSelectedWorkstreamId: vi.fn(),
     manualSync: vi.fn(), saveSupabaseConfig: vi.fn(), signIn: vi.fn(), signOut: vi.fn(), setAutostartEnabled: vi.fn(),
     loadFinanceDailySummaries: vi.fn(),
+    planProjectAction: vi.fn(), addProject: vi.fn(),
   },
 }));
 
 vi.mock("./useLocalSyncMemo", () => ({ useLocalSyncMemo: () => harness.runtime }));
+vi.mock("../lib/platform/capabilities", () => ({ isTauriRuntime: () => false, getPlatformCapabilities: () => ({
+  isAndroidLike: !harness.isDesktop, isBrowser: true, isTauriDesktop: harness.isDesktop,
+  supportsGlobalShortcut: harness.isDesktop, supportsQuickCaptureWindow: harness.isDesktop, supportsTray: harness.isDesktop,
+}) }));
+vi.mock("../features/dev-control/workspace/ProjectWorkspace", () => ({ ProjectWorkspace: (props: ProjectWorkspaceProps) => (
+  <section data-panel="inline-workspace" data-mode={props.mode} data-project={props.project?.id} data-embedded={props.embedded}>
+    <button onClick={() => props.actions.planProjectAction?.("project-action", "2026-11-08")}>작업 일정 배치</button>
+    <button onClick={() => props.actions.addProject({ name: "새 프로젝트", repository: null, branch: null, status: "ACTIVE", currentSummary: "", targetSummary: "", lastVerifiedCommit: null, lastVerifiedAt: null })}>인라인 프로젝트 만들기</button>
+  </section>
+) }));
 vi.mock("./useThemeMode", () => ({ useThemeMode: () => ({ themeMode: "dark", setThemeMode: vi.fn() }) }));
 vi.mock("../features/dev-control/github/useGitHubIntegration", () => ({ useGitHubIntegration: () => ({ refreshStatus: vi.fn() }) }));
 vi.mock("../features/dev-control/workspace/projectWorkspaceBridge", () => ({
@@ -79,7 +93,10 @@ function clickButton(label: string, navLabel?: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  harness.isDesktop = true;
   harness.runtime.tasks = [];
+  harness.runtime.projects = [];
+  harness.runtime.selectedProjectId = null;
   act(() => { renderer = create(<App />); });
 });
 
@@ -124,6 +141,44 @@ describe("Personal OS four-tab navigation", () => {
     clickButton("홈", "주요 화면");
     clickButton("오늘 할 일 열기");
     expect(renderer.root.findByProps({ "data-panel": "tasks" })).toBeDefined();
+  });
+
+  it("opens mobile workspaces inline, forwards task planning, and returns to the project list", () => {
+    harness.isDesktop = false;
+    harness.runtime.projects = [{ ...entity, id: "project-1", name: "프로젝트", description: "", repository: null, branch: null,
+      githubRepositoryId: null, githubOwner: null, githubRepo: null, status: "ACTIVE", currentSummary: "", targetSummary: "", lastVerifiedCommit: null, lastVerifiedAt: null }];
+    act(() => renderer.update(<App />));
+    clickButton("프로젝트 바로가기");
+    clickButton("작업 공간 열기");
+    const workspace = renderer.root.findByProps({ "data-panel": "inline-workspace" });
+    expect(workspace.props).toMatchObject({ "data-mode": "view", "data-project": "project-1", "data-embedded": true });
+    expect(harness.openWorkspace).not.toHaveBeenCalled();
+    clickButton("작업 일정 배치");
+    expect(harness.runtime.planProjectAction).toHaveBeenCalledWith("project-action", "2026-11-08");
+    clickButton("프로젝트 목록으로");
+    expect(renderer.root.findByProps({ "data-panel": "projects" })).toBeDefined();
+    clickButton("작업 공간 열기");
+    clickButton("홈", "주요 화면");
+    clickButton("프로젝트", "주요 화면");
+    expect(renderer.root.findAllByProps({ "data-panel": "inline-workspace" })).toHaveLength(0);
+    expect(renderer.root.findByProps({ "data-panel": "projects" })).toBeDefined();
+  });
+
+  it("switches the mobile creation workspace to the newly created project", () => {
+    harness.isDesktop = false;
+    act(() => renderer.update(<App />));
+    clickButton("프로젝트 바로가기");
+    clickButton("새 프로젝트 열기");
+    expect(renderer.root.findByProps({ "data-panel": "inline-workspace" }).props["data-mode"]).toBe("create");
+    clickButton("인라인 프로젝트 만들기");
+    expect(harness.runtime.addProject).toHaveBeenCalledWith(expect.objectContaining({ name: "새 프로젝트" }));
+    harness.runtime.projects = [{ ...entity, id: "new-project", name: "새 프로젝트", description: "", repository: null, branch: null,
+      githubRepositoryId: null, githubOwner: null, githubRepo: null, status: "ACTIVE", currentSummary: "", targetSummary: "", lastVerifiedCommit: null, lastVerifiedAt: null }];
+    harness.runtime.selectedProjectId = "new-project";
+    act(() => renderer.update(<App />));
+    expect(renderer.root.findByProps({ "data-panel": "inline-workspace" }).props)
+      .toMatchObject({ "data-mode": "view", "data-project": "new-project" });
+    expect(harness.openWorkspace).not.toHaveBeenCalled();
   });
 
   it("preserves quick capture and project/workstream workspace entry callbacks", () => {

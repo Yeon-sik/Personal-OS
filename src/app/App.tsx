@@ -1,3 +1,6 @@
+import { getPlatformCapabilities } from "../lib/platform/capabilities";
+import { ProjectWorkspace } from "../features/dev-control/workspace/ProjectWorkspace";
+import type { ProjectWorkspaceSelection } from "../features/dev-control/workspace/projectWorkspaceBridge";
 import { useMemo, useState } from "react";
 import { Command } from "lucide-react";
 import type { LocalDataSnapshot } from "../types";
@@ -30,6 +33,8 @@ export function App() {
   const memo = useLocalSyncMemo();
   const github = useGitHubIntegration();
   const { setThemeMode, themeMode } = useThemeMode();
+  const [inlineWorkspace, setInlineWorkspace] = useState<ProjectWorkspaceSelection | null>(null);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<AppTab>("home");
   const [recordSection, setRecordSection] = useState<RecordSection>("all");
   const [selectedDate, setSelectedDate] = useState(formatLocalDate());
@@ -41,6 +46,8 @@ export function App() {
         projects: memo.projects,
         projectMilestones: memo.projectMilestones,
         projectActions: memo.projectActions,
+        projectTaskLinks: memo.projectTaskLinks,
+        taskPlanningError: memo.taskPlanningError,
         projectIdeas: memo.projectIdeas,
         projectHistory: memo.projectHistory,
         workstreams: memo.workstreams,
@@ -56,6 +63,8 @@ export function App() {
     [
       github,
       memo.projectActions,
+      memo.projectTaskLinks,
+      memo.taskPlanningError,
       memo.projectHistory,
       memo.projectIdeas,
       memo.projectMilestones,
@@ -75,6 +84,11 @@ export function App() {
     github,
     actions: memo,
   });
+  const openProjectWorkspace = (selection: ProjectWorkspaceSelection) => {
+    setWorkspaceError(null);
+    if (!getPlatformCapabilities().isTauriDesktop) { setInlineWorkspace(selection); return; }
+    void openWorkspace(selection).catch(error => setWorkspaceError(error?.message ?? "프로젝트 작업 공간을 열지 못했습니다."));
+  };
   const quickCapture = useQuickCapture({
     onAddMemo: memo.addNoteForDate,
     onAddTask: memo.addTask,
@@ -145,7 +159,7 @@ export function App() {
 
   return (
     <div className="app-shell personal-os-shell flex w-full min-w-0 justify-center bg-slate-200 text-slate-900 dark:bg-black dark:text-neutral-100">
-      <div className={`relative flex h-full min-h-0 w-full ${activeView === "home" ? "max-w-6xl" : "max-w-[520px]"} min-w-0 flex-col border-x border-slate-300 bg-slate-100 shadow-panel dark:border-neutral-800 dark:bg-black dark:shadow-none`}>
+      <div className={`relative flex h-full min-h-0 w-full ${activeView === "home" || (activeView === "records" && recordSection === "all") ? "max-w-6xl" : "max-w-[520px]"} min-w-0 flex-col border-x border-slate-300 bg-slate-100 shadow-panel dark:border-neutral-800 dark:bg-black dark:shadow-none`}>
         <HeaderBar
           activeView={activeView}
           device={memo.device}
@@ -154,6 +168,7 @@ export function App() {
         />
 
         {memo.error ? <StatusBanner message={memo.error} /> : null}
+        {workspaceError ? <StatusBanner message={workspaceError} /> : null}
 
         <main className="os-main min-h-0 flex-1 overflow-hidden px-3 pb-2 pt-3" aria-label={APP_TAB_LABELS[activeView]}>
           <div className="os-tab-panel h-full min-h-0">
@@ -225,6 +240,8 @@ export function App() {
                     onDeleteTask={memo.deleteTask}
                     onSelectDate={setSelectedDate}
                     onToggleTask={memo.toggleTask}
+                    onUpdateDetails={memo.updateTaskDetails}
+                    onSkipOccurrence={memo.skipTaskOccurrence}
                     actionActions={memo.actionActions}
                     onManualSync={memo.manualSync}
                     isAuthenticated={memo.isAuthenticated}
@@ -251,6 +268,8 @@ export function App() {
                     onUpdatePlannedDate={memo.updateTaskPlannedDate}
                     onUpdateSchedule={memo.updateTaskSchedule}
                     onUpdateText={memo.updateTaskText}
+                    onUpdateDetails={memo.updateTaskDetails}
+                    onSkipOccurrence={memo.skipTaskOccurrence}
                   />
                 ) : (
                   <FitnessPanel
@@ -264,7 +283,10 @@ export function App() {
                 )}
               </RecordHub>
             ) : activeView === "projects" ? (
-              <DevControlPanel
+              inlineWorkspace ? <div className="flex h-full min-h-0 flex-col">
+                <button type="button" className="min-h-11 shrink-0 rounded border border-slate-300 px-3 text-left text-sm dark:border-neutral-700" onClick={() => setInlineWorkspace(null)}>프로젝트 목록으로</button>
+                <div className="min-h-0 flex-1"><ProjectWorkspace {...projectWorkspaceState} embedded mode={inlineWorkspace.mode === "create" && memo.selectedProjectId ? "view" : inlineWorkspace.mode} project={memo.projects.find(project => project.id === inlineWorkspace.projectId) ?? (inlineWorkspace.mode === "create" ? memo.projects.find(project => project.id === memo.selectedProjectId) ?? null : null)} actions={memo} github={github} /></div>
+              </div> : <DevControlPanel
                 projects={memo.projects}
                 projectMilestones={memo.projectMilestones}
                 projectActions={memo.projectActions}
@@ -287,15 +309,11 @@ export function App() {
                 selectedProjectId={memo.selectedProjectId}
                 onOpenProjectWorkspace={(projectId) => {
                   memo.setSelectedProjectId(projectId);
-                  void openWorkspace({ mode: "view", projectId }).catch((error: unknown) => {
-                    console.error("프로젝트 작업 공간을 열지 못했습니다.", error);
-                  });
+                  openProjectWorkspace({ mode: "view", projectId });
                 }}
                 onCreateProjectWorkspace={() => {
                   memo.setSelectedProjectId(null);
-                  void openWorkspace({ mode: "create", projectId: null }).catch((error: unknown) => {
-                    console.error("프로젝트 작업 공간을 열지 못했습니다.", error);
-                  });
+                  openProjectWorkspace({ mode: "create", projectId: null });
                 }}
                 actions={memo}
                 github={github}
@@ -304,7 +322,7 @@ export function App() {
           </div>
         </main>
 
-        <BottomNavigation activeTab={activeView} onChangeTab={setActiveView} />
+        <BottomNavigation activeTab={activeView} onChangeTab={tab => { setInlineWorkspace(null); setActiveView(tab); }} />
 
         <button
           type="button"
@@ -326,6 +344,7 @@ export function App() {
         />
         {homeTask && memo.actionActions && <ActionDetailDialog key={homeTask.id} task={homeTask}
           pending={snapshot.syncState?.pending.find(item => item.collection === "tasks" && item.id === homeTask.id)}
+          onUpdateDetails={memo.updateTaskDetails} onSkipOccurrence={memo.skipTaskOccurrence} onToggle={memo.toggleTask}
           actions={memo.actionActions} onClose={() => setHomeAction(null)} onDelete={memo.deleteTask} onSync={memo.manualSync} />}
       </div>
     </div>

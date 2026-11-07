@@ -218,14 +218,17 @@ export function SelectedDateRecords({
               actions={<DeleteItemButton label="할 일 삭제" onDelete={() => onDeleteTask(task.id)} />}
             >
               <div className="flex min-w-0 items-center gap-2">
-                <input
+                {task.skippedAt ? <button type="button" onClick={() => onToggleTask(task.id)}
+                  className="min-h-11 shrink-0 rounded-md border border-slate-300 px-2 text-xs font-medium dark:border-neutral-700">
+                  건너뛰기 취소
+                </button> : <input
                   type="checkbox"
                   checked={task.isDone}
                   disabled={task.registrationState === "CANDIDATE"}
                   onChange={() => onToggleTask(task.id)}
                   className="h-4 w-4 shrink-0 rounded border-slate-300 text-teal-700"
                   aria-label="할 일 완료 전환"
-                />
+                />}
                 <div
                   className={
                     task.isDone
@@ -237,7 +240,7 @@ export function SelectedDateRecords({
                 </div>
               </div>
               <div className="mt-1 text-xs text-slate-500 dark:text-neutral-400">
-                {task.isDone ? "완료" : formatTaskDueLabel(task)}
+                {task.skippedAt ? "이번 회차 건너뜀" : task.isDone ? "완료" : formatTaskDueLabel(task)}
               </div>
               <p className="mt-1 text-xs font-semibold text-teal-800 dark:text-teal-300">{actionRolesOnDate(task, selectedDate).map(role => ROLE_LABELS[role]).join(" · ")}</p>
               <ActionSummary task={task} />

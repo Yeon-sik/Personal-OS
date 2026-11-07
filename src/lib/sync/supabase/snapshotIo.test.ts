@@ -118,6 +118,31 @@ const fitnessWeightRow = {
 };
 
 describe("Supabase snapshot IO", () => {
+
+  it("preserves unknown details when legacy and current tasks share an upsert", async () => {
+    const saved = new Map<string, Record<string, unknown>>([
+      ["legacy", { id: "legacy", text: "old", checklist: [{ id: "keep", text: "keep", isDone: false }], description: "saved elsewhere" }],
+    ]);
+    const upsert = vi.fn(async (rows: Record<string, unknown>[]) => {
+      // Model PostgREST's bulk column union: absent values within that union
+      // become null unless the transport separates different payload shapes.
+      const columns = new Set(rows.flatMap(row => Object.keys(row)));
+      for (const row of rows) {
+        const values = Object.fromEntries([...columns].map(key => [key, row[key] ?? null]));
+        saved.set(String(row.id), { ...saved.get(String(row.id)), ...values });
+      }
+      return { error: null };
+    });
+    const transport = createSupabaseSnapshotTransport({ from: () => ({ upsert }) } as never);
+    await transport.upsertRows("tasks", [
+      { id: "legacy", text: "new title" },
+      { id: "current", text: "current", checklist: [], description: "" },
+    ], "id");
+    expect(saved.get("legacy")).toMatchObject({ text: "new title", description: "saved elsewhere",
+      checklist: [{ id: "keep", text: "keep", isDone: false }] });
+    expect(saved.get("current")).toMatchObject({ checklist: [], description: "" });
+  });
+
   it("paginates every snapshot table through the common transport", async () => {
     const ranges = new Map<SnapshotTableName, Array<[number, number]>>();
     const supabase = {
@@ -582,9 +607,9 @@ describe("Supabase snapshot IO", () => {
       "projects",
       "workstreams",
       "notes",
-      "tasks",
       "project_milestones",
       "project_actions",
+      "tasks",
       "project_ideas",
       "project_history",
       "workstream_projects",

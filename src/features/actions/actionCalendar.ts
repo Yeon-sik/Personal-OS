@@ -52,6 +52,7 @@ export function actionDatesInRange(task: Task, start: string, end: string): Arra
 export function actionStateLabel(task: Task, now = Date.now()): string {
   const a = normalizeActionFields(task);
   if (a.registrationState === "CANDIDATE") return "후보";
+  if (task.skippedAt) return "이번 회차 건너뜀";
   if (task.isDone) return "완료";
   const today = calendarDate(now, a.timeZone);
   if (task.dueDate) {

@@ -1,6 +1,7 @@
 import type { BackfillInput, Task } from "../../types";
 import { createEntityAuditFields } from "../../lib/dataTrust/backfillMetadata";
 import { createId } from "../../lib/storage/id";
+import { normalizeTaskPlanningFields, taskCompletionFields, validateTaskPlanning } from "./taskPlanning";
 
 // UI에는 soft delete 되지 않은 항목만 orderIndex 순서로 보여준다.
 export function getVisibleTasks(tasks: Task[]): Task[] {
@@ -41,6 +42,7 @@ export function createTask(
 
   return {
     ...auditFields,
+    ...normalizeTaskPlanningFields({}),
     id: createId(),
     text,
     isDone: false,
@@ -63,16 +65,21 @@ export function updateTask(
   >,
   deviceId: string,
 ): Task {
+  if (task.deletedAt) return task;
   if (task.registrationState === "CANDIDATE" && changes.isDone) return task;
+  const at = new Date(Math.max(Date.now(), Date.parse(task.updatedAt) + 1)).toISOString();
   const evidenceChanged = task.sourceType === "EXTERNAL_NOTICE" &&
     (["text", "dueDate", "dueTime"] as const).some(key => changes[key] !== undefined && changes[key] !== task[key]);
-  return {
+  const updated: Task = {
     ...task,
     ...changes,
+    ...(changes.isDone !== undefined ? taskCompletionFields(task, changes.isDone, new Date().toISOString()) : {}),
     ...(evidenceChanged ? { verificationStatus: "UNVERIFIED" as const, sourceCheckedAt: null, sourceCheckedBy: null } : {}),
-    updatedAt: new Date(Math.max(Date.now(), Date.parse(task.updatedAt) + 1)).toISOString(),
+    updatedAt: at,
     deviceId,
   };
+  validateTaskPlanning(updated);
+  return updated;
 }
 
 // 삭제 상태도 Supabase에 upsert하기 위해 tombstone으로 남긴다.

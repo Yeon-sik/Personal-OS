@@ -287,6 +287,7 @@ export function getDashboardStats(
 ): DashboardStats {
   const rangedVisibleTasks = snapshot.tasks
     .filter(isVisibleEntity)
+    .filter(task => !task.skippedAt)
     .filter((task) => isDateInRange(getTaskProductivityDate(task), range));
   const rangedTasks = rangedVisibleTasks.filter(
     (task) => !hasBackfillMetadata(task),
@@ -359,7 +360,7 @@ export function getCalendarMarkers(
     }
   }
 
-  for (const task of snapshot.tasks.filter(isVisibleEntity)) {
+  for (const task of snapshot.tasks.filter(isVisibleEntity).filter(task => !task.skippedAt)) {
     for (const { date, roles } of actionDatesInRange(task, range.startDate, range.endDate)) {
       const marker = ensureMarker(markers, date).tasks;
       if (task.registrationState === "CANDIDATE") {
@@ -417,6 +418,7 @@ export function getProductivitySeries(
 ): ProductivityPoint[] {
   const visibleTasks = tasks
     .filter(isVisibleEntity)
+    .filter(task => !task.skippedAt)
     .filter((task) => !hasBackfillMetadata(task))
     .filter((task) => isDateInRange(getTaskProductivityDate(task), range));
 
